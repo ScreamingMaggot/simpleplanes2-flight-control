@@ -24,6 +24,8 @@
 ## 仓库结构
 
 ```
+crafts/        课题机体 XML（E1 活塞验证机 TESTaircraft、喷气 TESTfighter；
+               FT 舵面律与参数面板内嵌于机体文件，复现必需）
 analysis/
   mfd-lua/     机载 Lua 律与补丁工具（build_patch.py）
   scripts/     遥测解析 parse_telemetry.py、机体建模 craft_model.py、
