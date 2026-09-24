@@ -1,0 +1,90 @@
+<Xml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../Schema.xsd">
+   <Stylesheets>
+      <Stylesheet>
+         <Constants>
+            <Constant name="Newline" value="&#x2028;" />
+            <Constant name="ColorPrimary" value="#28599e" />
+            <Constant name="FontNotoSansMono" value="Fonts/Noto_Sans_Mono/NotoSansMono-Regular SDF" />
+         </Constants>
+         <Styles>
+            <Style class="mfd-page" startVisible="false" />
+            <Style class="mfd-button" flaggedClass="mfd-button-selected" color="Black" colorAlpha="0.75" width="50" height="24" />
+            <Style class="wide-button" width="125" />
+            <Style class="mfd-button-selected" color="@ColorPrimary" />
+            <Style class="Text" fontSize="16" font="@FontNotoSansMono" />
+         </Styles>
+         <Templates>
+            <Template templateId="mfd-button">
+               <Image id="@id" class="mfd-button" anchor="@anchor" position="@position">
+                  <Text id="btn-text" color="White" autoSize="true" fontSizeMin="14" fontSizeMax="16" wordWrapping="false" margin="2 0" />
+               </Image>
+            </Template>
+         </Templates>
+      </Stylesheet>
+   </Stylesheets>
+   <Widgets>
+      <Image id="mfd-root" name="mfd-ui" color="#191919">
+         <Empty id="page-menu" class="mfd-page">
+            <Text text="SimpleMFD@(Newline)MENU" color="White" />
+         </Empty>
+         <Empty id="page-tgp" class="mfd-page">
+            <Empty id="tgp-on" startVisible="false">
+               <RawImage id="tgp-camera" color="Green" />
+               <Image color="Black" colorAlpha="0.75" width="60" height="24" position="0 -50">
+                  <Text id="tgp-distance" color="White" autoSize="true" fontSizeMin="14" fontSizeMax="18" wordWrapping="false" margin="2 0" />
+               </Image>
+               <Image sprite="Sprites/Flight/Crosshair" width="32" height="32" />
+            </Empty>
+            <Empty id="tgp-off" startVisible="false">
+               <Text text="TGP OFF" />
+            </Empty>
+         </Empty>
+         <Empty id="page-act" class="mfd-page" />
+         <Empty id="page-flt" class="mfd-page" margin="0 10">
+            <Text text="ALT {craft.AltitudeAgl;00000;ShortDistance}" position="0 80" alignment="Left" />
+            <Text text="SPD {craft.TAS;0000;Speed}" position="0 60" alignment="Left" />
+
+            <Text text=" HDG {craft.Heading;000}" position="0 80" alignment="Right" />
+            <Text text="FUEL {craft.Fuel * 100;000}" position="0 60" alignment="Right" />
+
+            <Text text="G {craft.VerticalG;0.0}" position="0 20" alignment="Left" />
+            <Text text="α {-craft.AngleOfAttack;#0.0}" position="0 0" alignment="Left" />
+
+            <Text text="X{craft.Longitude;+000000}" position="0 20" alignment="Right" />
+            <Text text="Y{craft.Latitude;+000000}" position="0 0" alignment="Right" />
+            
+            <Text text="TRIM{craft.Controls.Trim * 100; 000}" position="0 -40" alignment="Right" />
+            <Text text="FLAP{craft.Controls.Flaps * 100; 000}" position="0 -60" alignment="Right" />
+
+            <Text text="VTOL{craft.Controls.Vtol * 100; 000}" position="0 -40" alignment="Left" />
+            <Text text=" THR{craft.Controls.Throttle * 100; 000}" position="0 -60" alignment="Left" />
+
+            <Text text="RESET" position="0 -90" />
+         </Empty>
+         <Empty id="page-wpn" class="mfd-page">
+            <Text id="target-name" anchor="BottomCenter" position="0 5" alignment="Bottom" width="150" />
+         </Empty>
+         <Empty id="buttons">
+            <Instance templateId="mfd-button" id="btn-1" anchor="TopCenter" position="-90 0" />
+            <Instance templateId="mfd-button" id="btn-2" anchor="TopCenter" position="-30 0" />
+            <Instance templateId="mfd-button" id="btn-3" anchor="TopCenter" position="30 0" />
+            <Instance templateId="mfd-button" id="btn-4" anchor="TopCenter" position="90 0" />
+
+            <Instance templateId="mfd-button" id="btn-5" anchor="MiddleRight" position="0 90" />
+            <Instance templateId="mfd-button" id="btn-6" anchor="MiddleRight" position="0 30" />
+            <Instance templateId="mfd-button" id="btn-7" anchor="MiddleRight" position="0 -30" />
+            <Instance templateId="mfd-button" id="btn-8" anchor="MiddleRight" position="0 -90" />
+
+            <Instance templateId="mfd-button" id="btn-9" anchor="BottomCenter" position="90 0" />
+            <Instance templateId="mfd-button" id="btn-10" anchor="BottomCenter" position="30 0" />
+            <Instance templateId="mfd-button" id="btn-11" anchor="BottomCenter" position="-30 0" />
+            <Instance templateId="mfd-button" id="btn-12" anchor="BottomCenter" position="-90 0" />
+
+            <Instance templateId="mfd-button" id="btn-13" anchor="MiddleLeft" position="0 -90" />
+            <Instance templateId="mfd-button" id="btn-14" anchor="MiddleLeft" position="0 -30" />
+            <Instance templateId="mfd-button" id="btn-15" anchor="MiddleLeft" position="0 30" />
+            <Instance templateId="mfd-button" id="btn-16" anchor="MiddleLeft" position="0 90" />
+         </Empty>
+      </Image>
+   </Widgets>
+</Xml>

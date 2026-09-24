@@ -1,0 +1,11 @@
+<MfdProgram id="Default">
+   <UI file="UI/Xml/Mfd/DefaultMfdUI" />
+   <Script file="Craft/Mfd/DefaultProgram" />
+   <Pages>
+      <Page id="page-menu" name="MENU" />
+      <Page id="page-tgp" name="TGP" />
+      <Page id="page-act" name="ACT" />
+      <Page id="page-wpn" name="WPN" />
+      <Page id="page-flt" name="FLT" />
+   </Pages>
+</MfdProgram>

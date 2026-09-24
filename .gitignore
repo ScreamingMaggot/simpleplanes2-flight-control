@@ -1,0 +1,17 @@
+# 原始遥测日志与大数据（体积与隐私；格式与脚本在库，数据不随库分发）
+analysis/data/
+tools/
+# 游戏反编译产物（专有代码，仅供个人研究，不发布）
+analysis/decomp/
+# 生成物（可用脚本一键重建）
+analysis/figures/*.html
+analysis/mfd-lua/MfdProgram.patched.xml
+__pycache__/
+*.orig
+*.bak
+.DS_Store
+
+# LaTeX 中间产物
+*.aux
+*.out
+analysis/*.log

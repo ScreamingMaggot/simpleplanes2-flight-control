@@ -1,0 +1,1099 @@
+-- ============ 遥测附加模块（追加在官方 MFD 脚本之后） ============
+-- 机制：MfdProgram 每帧经 RoundRobin 调 update()；print() 直通 Debug.Log → Player.log
+-- 输出行格式：TEL,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw
+-- 注意：视野外/飞机被剔除时 MFD 可能停更，采样间隔以每行自带的 t 为准（不要假设等间隔）
+
+local _origInitialize = initialize
+local _origUpdate = update
+local _frame = 0
+local _lastT = 0
+local _cidn = nil          -- 本机身份号（首帧位置派生；一局面多架带MFD的机会共写一份日志）
+
+function initialize()
+	if _origInitialize then _origInitialize() end
+	print("TELHDR,cid,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw,flp")
+end
+
+function update()
+	if _origUpdate then _origUpdate() end
+	local dt = craft.Time - _lastT
+	_lastT = craft.Time
+	if _cidn == nil then
+		local a, b = craft.Latitude, craft.Longitude
+		_cidn = math.floor(math.abs(a * 13.7 + b * 71.3 + craft.Altitude * 3.17) * 97.3) % 99999 + 1
+	end
+	-- v3.3 出生帧自动标定：只看 agl<5（螺旋桨机停车 IAS 被滑流吹出假数，IAS 判据全废）
+	if rwy == nil and craft.AltitudeAgl < 5 then
+		rwy = { lat = craft.Latitude, lon = craft.Longitude,
+		        hdg = craft.Heading, alt = craft.Altitude - craft.AltitudeAgl }
+		print(string.format("RWY AUTOCAP lat=%.0f lon=%.0f hdg=%.0f groundalt=%.0f",
+			rwy.lat, rwy.lon, rwy.hdg, rwy.alt))
+	end
+	tg_rates(dt)
+	autopilot(dt)
+	land_nav(dt)
+	seeker(dt)
+	-- v8 地面门：滑跑/低速时能量管理也不出手（telemetry24 全案防地面误动）
+	-- v16.2：锁定+武装=满油直通；且停车螺旋里 IAS<40 不得解除油门环（上一局死亡自锁：
+	-- airborne 门一断，收光的油门被交还玩家=0，越慢越没油）。参战分支只用 agl>5 真地面门。
+	-- SC-3：着陆模式下油门归 land_nav 管，能带让位。
+	local airborne = craft.AltitudeAgl > 30 and craft.IAS > 40
+	local ft_armed = false
+	pcall(function() ft_armed = craft.Controls.Flaps > 0.5 end)
+	local engaging = ft_armed and craft.AltitudeAgl > 5
+	energy_band(dt, not lg_on and (engaging or ((ap_on or dc_on) and airborne)))
+	_frame = _frame + 1
+	if math.fmod(_frame, 4) == 0 then
+		print(string.format("POS,%d,%.3f,%.1f,%.1f,%.1f",
+			_cidn, craft.Time, craft.Latitude, craft.Longitude, craft.Altitude))
+	end
+	if math.fmod(_frame, 10) == 0 then
+		print(string.format("SEEK,%d,%.3f,%d,%.0f,%+.1f,%+.1f,%d,%s",
+			_cidn, craft.Time, seek_lock and 1 or 0, seek_D, seek_Ddot, seek_bank, dc_on and 1 or 0, seek_name))
+		local tp = seek_tp
+		if tp then
+			print(string.format("TGT,%d,%.3f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
+				_cidn, craft.Time,
+				tp.x or -99999, tp.y or -99999, tp.z or -99999,
+				tp.vx or -99999, tp.vy or -99999, tp.vz or -99999))
+		else
+			print(string.format("TGT,%d,%.3f,-99999,-99999,-99999,-99999,-99999,-99999", _cidn, craft.Time))
+		end
+	end
+	if math.fmod(_frame, 2) == 0 then   -- v4.54 验证通过（app34 目视无振），销诊断态恢复 12 Hz
+		local c = craft.Controls
+		print(string.format("TEL,%d,%.3f,%.1f,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",
+			_cidn, craft.Time,
+			craft.Altitude, craft.AltitudeAgl, craft.IAS, craft.GS,
+			craft.PitchAngle, craft.PitchRate, craft.YawRate,
+			craft.Heading, craft.RollAngle, craft.RollRate,
+			craft.AngleOfAttack, craft.AngleOfSlip, craft.GForce, craft.VerticalG,
+			craft.Fuel,
+			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
+	end
+end
+
+-- ============ 自动驾驶 v4（MFD 按钮面板 = 迷你 MCP） ============
+-- 按钮1=接通/断开  按钮2=高度冻结(把当前高度设为目标)  按钮3=目标+100  按钮4=目标-100
+-- 架构：外环 高度P + 爬升率前馈 + 近区积分(抗饱和)；内环 姿态P + 2Hz滤波q阻尼。全在 Lua，真 dt。
+ap_on  = false
+ap_ovr = false
+ap_alt = 400          -- 目标高度 m
+ap_int = 0            -- 积分状态（度）
+qf     = 0            -- 滤波俯仰角速率
+vvf    = 0            -- 滤波爬升率 m/s
+last_agl = nil
+-- ==== v6 地形前瞻（200m 坡度外推）====
+last_alt = nil        -- Altitude(AMSL) 差分状态
+alf      = 0          -- 滤波垂直速率 m/s
+trate    = 0          -- 滤波地形抬升率 m/s（沿航迹）
+tg_act   = false      -- 前瞻介入标志
+tw_act   = false      -- AP断开时告警标志
+tw_armed = false      -- v6.3 告警武装：首次离地>100m 后置位
+TG_LOOK  = 200        -- 前瞻距离 m
+TG_MARGIN= 60         -- 最小净空 m
+-- ==== v6.1 机动包线 ====
+VV_MAX   = 40         -- 期望最大高度变化率 m/s
+CMD_MAX  = 20         -- 姿态指令绝对上限（度）
+V_MIN    = 88         -- 低速失速保护 m/s（fighter_stats: Vs≈68，1.3 倍裕度；SC-1 旧值 75）
+thr_pk   = 0          -- 本次接通后最大 IAS（动态能带基准）
+ap_thr   = false      -- 油门 override 标志
+
+function ap_button(id)
+	if id == 1 then
+		ap_on = not ap_on
+		if not ap_on then ap_int = 0; thr_pk = 0 end
+		print(string.format("AP %s target=%.0f", ap_on and "ENGAGED" or "OFF", ap_alt))
+	elseif id == 2 then
+		ap_alt = craft.AltitudeAgl
+		print(string.format("AP BUG SET: %.0f m", ap_alt))
+	elseif id == 3 then
+		ap_alt = ap_alt + 100
+		print(string.format("AP TARGET -> %.0f m", ap_alt))
+	elseif id == 4 then
+		ap_alt = math.max(50, ap_alt - 100)
+		print(string.format("AP TARGET -> %.0f m", ap_alt))
+	elseif id == 5 then
+		dc_on = not dc_on
+		if dc_on then
+			-- 循环模式：AirToAir(1)→AirToGround(2)（战舰等地物必须 A2G 才匹配 TargetMatchesMode）
+			dc_mode = (dc_mode == 1) and 2 or 1
+			local okm = pcall(function() craft.Targeting.Mode = dc_mode end)
+			local rb = "?"
+			pcall(function() rb = tostring(craft.Targeting.Mode) end)
+			print(string.format("DOG MODE ON, set=%d ok=%s readback=%s", dc_mode, tostring(okm), rb))
+		else
+			local ok2 = pcall(function() craft.Targeting.Mode = "Off" end)
+			if not ok2 then pcall(function() craft.Targeting.Mode = 0 end) end
+			if dc_ovr then craft.Controls:ReleaseInput("Roll"); dc_ovr = false end
+			print("DOG MODE OFF")
+		end
+	elseif id == 6 then
+		local ok = pcall(function() craft.Targeting:NextTarget() end)
+		print("NEXT_TARGET ok="..tostring(ok))
+	elseif id == 9 then
+		-- SC-3 v4 极简两态 + SC-3b 远距前端：近 spawn 跑道=立即下滑；远距空中=选跑道进近段。
+		if not lg_on then
+			lg_vg, lg_alt_prev, lg_brk, lg_fint, lg_lint, yrf = 0, craft.Altitude, 0, 0, 0, 0
+			lg_agl_prev, lg_pr_pk, lg_sig, lg_tgt_lock, lg_ga = craft.AltitudeAgl, 0, nil, nil, nil
+			lg_ufm = 0
+			lg_rfm = 0
+			lg_cn = false
+			lg_lrate, lg_lprev = 0, nil
+			lg_wp, lg_wi, lg_pa, lg_plan, lg_loop = nil, 0, nil, nil, 0
+			lg_est_t = nil
+			lg_orb, lg_orb_entry, lg_orb_t0, lg_S, lg_W, lg_oc, lg_oe = nil, nil, nil, 1, 1200, nil, nil
+			local dcap = rwy and math.sqrt((rwy.lat - craft.Latitude)^2 + (rwy.lon - craft.Longitude)^2) or nil
+			-- v4.55 近距立即下滑加线判据（app35 实锤：反侧 2.4 km/侧偏 594 m/航向差 162°
+			-- 被 dcap<2500 无条件放行 stage2——封版下滑无截获逻辑，直飞入湖。立即下滑的
+			-- 合法域=已在线上附近：航向差<60° 且侧偏<300 m，否则走选配/拒接正路）。
+			local eps_cap, l_cap = 999, 9999
+			if dcap then
+				local ch_ = rwy.hdg * math.pi / 180
+				eps_cap = math.abs(wrapd(rwy.hdg - craft.Heading))
+				l_cap = math.abs((rwy.lat - craft.Latitude) * math.sin(ch_) - (rwy.lon - craft.Longitude) * math.cos(ch_))
+			end
+			if dcap and dcap < 2500 and eps_cap < 60 and l_cap < 300 then
+				lg_on = true
+				lg_stage = 2
+				print("LAND ON stage=GLIDE (立即下滑)")
+			elseif craft.AltitudeAgl > 50 then
+				local e, r, be, pri = rwy_select()
+				if not e then
+					print("LAND REFUSED: 无可用方向（入口在前且跑道头未过者的端头都没有），保持飞行人工重加入")
+				else
+					local fld = e.n:match('^(.-)%s')
+					local rlen = 2000
+					for _, q in ipairs(RWYS) do
+						if q ~= e and q.n:match('^(.-)%s') == fld
+							and math.abs(wrapd(q.hdg - e.hdg)) > 160 then
+							rlen = math.sqrt((q.lat - e.lat)^2 + (q.lon - e.lon)^2)
+							break
+						end
+					end
+					rwy = { lat = e.lat + math.cos(r) * LG_TGT_IN,
+					        lon = e.lon + math.sin(r) * LG_TGT_IN,
+					        hdg = e.hdg, alt = e.alt, len = rlen }
+					lg_app = { lat = e.lat - math.cos(r) * LG_ENTRY,
+					           lon = e.lon - math.sin(r) * LG_ENTRY }
+					lg_on = true
+					lg_stage = 1
+					print(string.format("RWY SEL %s hdg=%.0f thr=(%.0f,%.0f) entry=(%.0f,%.0f) d=%.0f berr=%.0f pri=%d",
+						e.n, e.hdg, e.lat, e.lon, lg_app.lat, lg_app.lon,
+						math.sqrt((lg_app.lat - craft.Latitude)^2 + (lg_app.lon - craft.Longitude)^2), be or -1, pri and 1 or 0))
+					-- v4.34 进场方式规划（用户裁定：本机机动性差，短距直线截获=不可能，
+					-- 程序必须按本机能产生的转弯能力设计）。几何超限就不赌直线截获：
+					-- 预生成矩形程序（下风→base→final 汇入点），每个拐角都是 ≤180°、
+					-- R=V²/(g·tan50°) 内有界转弯；到 final 汇入点自动切回截获律上道。
+					local ch0 = e.hdg * math.pi / 180
+					local c0, s0v = math.cos(ch0), math.sin(ch0)
+					local dn, de = rwy.lat - craft.Latitude, rwy.lon - craft.Longitude
+					local s0 = dn * c0 + de * s0v          -- land_nav 同轴：正=瞄准点在前方
+					local l0 = dn * s0v - de * c0          -- 右偏为正
+					local eps0 = math.abs(wrapd(e.hdg - craft.Heading))
+					-- v4.37：R 按程序段标称速度 LG_PAT_SPEED 算，不按接管瞬时 GS（app18 瞬时
+					-- ias 92/66 都能把程序尺寸拉歪——规划要按实际要飞的包线，不是接管那一拍）。
+					local R = math.max(300, math.min(1200,
+						LG_PAT_SPEED * LG_PAT_SPEED / (9.81 * math.tan(50 * math.pi / 180))))
+					-- v4.40 剖面规划（用户架构裁定：下滑→着陆是固定流程；进近段的职责=
+					-- 在切线点前把飞机送到「规定航道+规定高度」。app20 局1 实锤：1099 m 高
+					-- 接管、死平台 310、下沉钳 −5 m/s → 需要 10.6 km 而跑道只剩 9.8 km，
+					-- 数学上到不了位，FAF 正确拒收后干越全场）。规划线=从接管点 (s0,alt0)
+					-- 到 (切线点, 平台/程序高) 的直线，坡度钳 ≤7°（本机能量预算内可飞）。
+					local direct_ok = eps0 < 70 and s0 > 2000 and s0 > 1000 + 1.73 * math.abs(l0)
+					do
+						-- v4.44 顺序修正（app23"逆天轨迹"案）：可达性判定必须**先**用 direct
+						-- 参数做、判完再选切线点——v4.43 反了序：降级后 plan 仍按 direct 的
+						-- (4500,310) 建，tgtA=f(s) 在下风边随 s 涨、final 边随 s 落，绕圈被
+						-- 拽着忽高忽低=套索航迹。降级后按 pattern 参数 (2100,260) 重建。
+						local tanm = math.tan(LG_SLOPE_MAX * math.pi / 180)
+						if direct_ok and craft.Altitude - (rwy.alt + LG_APP_ALT)
+							> tanm * math.max(s0 - (LG_ENTRY + 500), 0) + 50 then
+							direct_ok = false
+							print(string.format("DIRECT UNREACHABLE: 高%.0f，降级 PATTERN 盘旋消高", craft.Altitude))
+						end
+						local s_pf, A_pf = LG_SF, rwy.alt + LG_PA_OFF
+						if direct_ok then
+							s_pf = LG_ENTRY + 500
+							A_pf = rwy.alt + LG_APP_ALT
+						end
+						local tanp = 0
+						if craft.Altitude > A_pf and s0 > s_pf + 800 then
+							tanp = math.min(tanm, (craft.Altitude - A_pf) / (s0 - s_pf))
+						end
+						lg_plan = { pf = s_pf, A = A_pf, t = tanp }
+						print(string.format("PROFILE to=(s%d,alt%.0f) grad=%.1f deg", s_pf, A_pf, math.deg(math.atan(tanp))))
+					end
+					if direct_ok then
+						print(string.format("JOIN=direct eps0=%.0f l0=%.0f s0=%.0f R=%.0f", eps0, l0, s0, R))
+					else
+						-- v4.46 远端消高=切线轨道（用户裁定：盘旋轨道与延长线投影相切，
+						-- 进场就不该狼狈）：圆心=WP1 (s_wd, S·W)、半径=W → 圆与延长线相切于
+						-- (s_wd, 0)。消高沿圆飞，放到位时在切点原地切出——航向已对、零转弯。
+						-- v4.49 生成逻辑归 build_pattern()（与复飞重加入共用），轨道入口=远切点。
+						build_pattern()
+						print(string.format("JOIN=pattern eps0=%.0f", eps0))
+					end
+				end
+			else
+				print("LAND REFUSED: 地面且距跑道>2.5km（无进近目标场景）")
+			end
+		else
+			lg_on = false; lg_stage = 0
+			land_release()
+			print("LAND OFF")
+		end
+	elseif id == 10 then
+		-- 机体 AP 内环剖面：1=SC-1(轴→舵面 1.0)，2=战斗机(3.5)
+		if kap_profile == 1 then kap_profile = 2 else kap_profile = 1 end
+		if kap_profile == 1 then KAP_P, KAP_Q = 0.045, 0.007 else KAP_P, KAP_Q = 0.017, 0.0006 end
+		print(string.format("AP PROFILE = %s (P=%.3f Q=%.4f)", kap_profile == 1 and "SC-1" or "FIGHTER", KAP_P, KAP_Q))
+	end
+end
+
+-- 包裹官方按钮回调（官方脚本已定义 onMfdButtonPressed）
+local _origBtn = onMfdButtonPressed
+function onMfdButtonPressed(id)
+	if _origBtn then _origBtn(id) end
+	ap_button(id)
+end
+
+-- 速率估计（AP 断开也持续跑，供告警用）：vvf=d(agl)/dt, alf=d(alt)/dt, 均 0.5Hz 低通
+function tg_rates(dt)
+	if dt <= 0 or dt > 0.5 then dt = 0.05 end
+	local agl, alt = craft.AltitudeAgl, craft.Altitude
+	if last_agl then
+		local vv = (agl - last_agl) / dt
+		if math.abs(vv) < 60 then
+			vvf = vvf + (vv - vvf) * math.min(1, dt * 2 * math.pi * 0.5)
+		end
+	end
+	if last_alt then
+		local va = (alt - last_alt) / dt
+		if math.abs(va) < 60 then
+			alf = alf + (va - alf) * math.min(1, dt * 2 * math.pi * 0.5)
+		end
+	end
+	last_agl, last_alt = agl, alt
+	-- 地形抬升率：E=alt-agl → dE/dt = d(alt)/dt − d(agl)/dt，再 0.25Hz 平滑
+	local tr = alf - vvf
+	trate = trate + (tr - trate) * math.min(1, dt * 2 * math.pi * 0.25)
+	local floor_agl = tg_floor()
+	if ap_on then
+		local act = floor_agl > ap_alt
+		if act ~= tg_act then
+			tg_act = act
+			print(string.format("AP TERRAIN GUARD %s floor=%.0f m (rise~%.0f m/200m)",
+				act and "ON" or "off", floor_agl, math.max(0, trate) * (TG_LOOK / math.max(craft.GS, 10))))
+		end
+	else
+		-- 地面不告警：滑跑 IAS 会过 30 但 agl≈2，用 agl>3 排除在地面状态
+		local act = agl < floor_agl and craft.IAS > 30 and agl > 3
+		if act ~= tw_act then
+			tw_act = act
+			if act then print(string.format("TERRAIN WARN agl=%.0f < floor=%.0f", agl, floor_agl)) end
+		end
+	end
+end
+
+-- 前瞻地形最低 AGL：净空 + 200m 内坡度外推抬升量（只防抬升，不催俯冲）
+function tg_floor()
+	local lead = TG_LOOK / math.max(craft.GS, 10)
+	return TG_MARGIN + math.max(0, trate) * lead
+end
+
+-- ==== v7 狗斗通道：锁定锥信标导引（Task3/4 骨架） ====
+dc_on   = false       -- 狗斗模式
+dc_mode = 1           -- 5 号键循环写入的 TargetingMode（1=AirToAir 2=AirToGround）
+dc_ovr  = false       -- Roll 轴接管标志
+rrf     = 0           -- 滤波滚转角速率
+seek_lock = false     -- 当前锁定
+seek_D    = 0         -- 目标距离 m
+seek_Ddot = 0         -- 距离变化率 m/s（负=收近）
+seek_bank = 0         -- 指令坡度 deg
+seek_ph   = 0         -- 搜索相位计时
+seek_dir  = 1         -- 搜索转弯方向 ±1
+seek_name = "-"       -- 目标名（SEEK 行尾列，判锁定目标类型）
+seek_tp   = nil       -- 目标世界位置/速度（Lua 代理不暴露则为 nil；TGT 行用 -99999 标记）
+ghost_t   = 0         -- 幽灵锁计时（D 冻结秒数）
+-- ==== v7 狗斗通道状态结束 ====
+
+-- v8 架构：导引全部下沉 FT 副翼表达式（FT 原生可读 TargetHeading/TargetLocked，见 platform-facts §十八）。
+-- Lua 的 seeker 退为纯观测器：只记录锁定/距离/收距率，不再碰 Roll 轴
+-- （telemetry24 教训：Lua 抖动 + FT 追踪在地面同时开火 → 起飞滑跑滚翻）。
+function seeker(dt)
+	if dt <= 0 or dt > 0.5 then dt = 0.05 end
+	if dc_ovr then craft.Controls:ReleaseInput("Roll"); dc_ovr = false end
+	local tgt = nil
+	pcall(function() tgt = craft.Targeting.Target end)
+	local D = nil
+	if tgt ~= nil then pcall(function() D = tgt.Distance end) end
+	if D then
+		pcall(function() seek_name = tgt.Name end)
+		-- 幽灵锁检测（击落案：AutoSelect 切到 USS Beast 后 D 冻结 80s，FT 残方位喂 6·EPS
+		-- →恒坡度慢滚+近海撞墙边缘）。D 5 秒纹丝不动=目标数据已死 → 断模式放律。
+		if math.abs(D - seek_D) < 0.5 then
+			ghost_t = ghost_t + dt
+			if ghost_t > 5 then
+				local ok = pcall(function() craft.Targeting.Mode = 0 end)
+				print(string.format("GHOST_TARGET D=%.0f stuck 5s -> mode OFF ok=%s", D, tostring(ok)))
+				ghost_t = 0
+			end
+		else
+			ghost_t = 0
+		end
+		local t = {}
+		pcall(function() local p = tgt.Position; t.x = p.x; t.y = p.y; t.z = p.z end)
+		pcall(function() local v = tgt.Velocity; t.vx = v.x; t.vy = v.y; t.vz = v.z end)
+		if t.x ~= nil or t.vx ~= nil then seek_tp = t else seek_tp = nil end
+		if seek_D > 0 then
+			local dd = (D - seek_D) / dt
+			if math.abs(dd) < 900 then
+				seek_Ddot = seek_Ddot + (dd - seek_Ddot) * math.min(1, dt * 2 * math.pi * 0.5)
+			end
+		end
+		seek_D = D
+		seek_lock = true
+	else
+		seek_lock = false
+		seek_tp = nil
+	end
+end
+
+-- 能量管理：常规=动态能带[thr_pk-25,thr_pk+40]；狗斗锁定=机动速度带 140~170 m/s
+-- （R=V²/gtanφ，把速度压进角速度窗口比任何增益都狠；出锁定自动恢复常规带）
+function energy_band(dt, active)
+	if not active then
+		if ap_thr then craft.Controls:ReleaseInput("Throttle"); ap_thr = false end
+		return
+	end
+	local armed = dc_on
+	if not armed then pcall(function() armed = craft.Controls.Flaps > 0.5 end) end
+	if armed then
+		-- v16.4：武装=恒满油，只掐超速尖峰（IAS>250 收到 0.5，跌回立即重新推满）。
+		-- 旧版 150~240 死区+释放=油门卡 0.5 陷阱，中段闭率被砍半（PN 数据实锤）。
+		local thr = craft.Controls.Throttle
+		if craft.IAS > 250 then thr = math.max(0.5, thr - 0.5 * dt)
+		else thr = math.min(1, thr + 0.4 * dt) end
+		craft.Controls:OverrideInput("Throttle", thr)
+		ap_thr = true
+		return
+	end
+	if not (dc_on or ap_on) then
+		-- 兜底：非武装非 AP——不碰油门（正常到不了这里，active 门已滤）
+		if ap_thr then craft.Controls:ReleaseInput("Throttle"); ap_thr = false end
+		return
+	end
+	if craft.IAS > thr_pk then thr_pk = craft.IAS end
+	local lo = math.max(60, thr_pk - 25); local hi = thr_pk + 40
+	local thr = craft.Controls.Throttle
+	if craft.IAS < lo then thr = math.min(1, thr + 0.6 * dt)
+	elseif craft.IAS > hi then thr = math.max(0.35, thr - 0.4 * dt)
+	else thr = nil end
+	if thr then
+		craft.Controls:OverrideInput("Throttle", thr)
+		ap_thr = true
+	elseif ap_thr then
+		craft.Controls:ReleaseInput("Throttle")
+		ap_thr = false
+	end
+end
+
+function autopilot(dt)
+	if dt <= 0 or dt > 0.5 then dt = 0.05 end
+	if not ap_on or lg_on then
+		if ap_ovr then craft.Controls:ReleaseInput("Pitch"); ap_ovr = false end
+		return
+	end
+	local agl = craft.AltitudeAgl
+	-- v6：有效目标 = max(设定高度, 地形下限)——撞山方向自动抬，低地不干预
+	local tgt = math.max(ap_alt, tg_floor())
+	local e = tgt - agl
+	-- 近区积分（只认设定高度误差），抗饱和
+	local e_set = ap_alt - agl
+	if math.abs(e_set) < 60 then
+		ap_int = math.max(-2, math.min(2, ap_int + e_set * dt * 0.02))
+	end
+	-- v5.1：外环 高度P + V/S前馈 + I + 坡度补偿（升力倾斜按 n=1/cosφ 补俯仰）
+	local phi = math.abs(craft.RollAngle)
+	if phi > 80 then phi = 80 end
+	local bank_comp = 3.0 * (1 / math.cos(phi * math.pi / 180) - 1)   -- 30°坡+0.5°，45°坡+1.2°，60°坡+3°
+	-- v6.2：前馈改用 AMSL 速率 alf（vvf 含地形运动，山区会污染；平地两者相等）
+	local cmd_deg = 0.16 * e + ap_int - 0.22 * alf + bank_comp
+	-- v6.1：限幅由期望高度变化率反解 cmd_lim = min(20°, asin(VV_MAX/GS))
+	local gs = math.max(craft.GS, 30)
+	local lim = math.min(CMD_MAX, math.asin(math.min(0.95, VV_MAX / gs)) * 180 / math.pi)
+	cmd_deg = math.max(-lim, math.min(lim, cmd_deg))
+	-- 失速保护：低速时禁止大抬头（俯冲不限，速度自己会长回来）
+	if craft.IAS < V_MIN and cmd_deg > 8 then cmd_deg = 8 end
+	-- 能量管理 v7.2：动态能带 [thr_pk-25, thr_pk+40]，AP 或狗斗任一激活时生效（见 update 中调用）
+	-- 内环：姿态P + 滤波q阻尼（轴正=推杆=低头）
+	-- v21.4 链路换算：FT 升降舵律无目标时退化为 面=10·|p|·轴=3.5·u（v19 p=−0.35），
+	-- SC-1 时代该系数 0.5，AP 内环不折算=俯仰 7 倍增益自激振荡。按有效舵量 ÷7 整定。
+	qf = qf + (craft.PitchRate - qf) * math.min(1, dt * 2 * math.pi * 2)
+	local theta_err = cmd_deg - craft.PitchAngle
+	local u = -KAP_P * theta_err - KAP_Q * qf
+	craft.Controls:OverrideInput("Pitch", math.max(-1,math.min(1, u)))
+	ap_ovr = true
+end
+
+-- ============ SC-3 自动着陆（按钮9 模式/跑道捕获，按钮10 机体剖面（7/8 不可用改 9/10）） ============
+-- 首轮范围：进场对齐 → 3.5° 下滑 → 自动复飞；平飘/触地/滑跑后置（简报裁定）。
+lg_on = false
+lg_stage = 0            -- 1 进场 2 下滑 3 复飞
+rwy = nil               -- 跑道基准：捕获时本机 lat/lon/hdg/alt
+lg_ovr = { roll=false, pitch=false, thr=false, gear=false }
+lg_t0 = nil           -- 触地时刻（滑跑超时用）
+kap_profile = 1         -- 1=SC-1(轴→舵面 1.0，v4.14 升降舵 p 翻倍后)，2=战斗机(3.5)
+KAP_P, KAP_Q = 0.045, 0.007   -- v4.53：app32 频谱定罪内环泵振（下滑全程 4.2 Hz≈fs/6 采样极限环，
+                              --   杆 rms 0.02 喂着 ±2°/s 的机体振铃）→ P 降 25%、Q 升并放宽滤波见下。
+                              --   （轴系数 0.5→1.0 ⇒ 内环 P 减半保环路总增益不变，v21.4 跨侧联动教训）
+LG_SPEED = 62           -- 下滑速度 m/s（v4.28：app10 实锤 55 低于平飞下限 60~62——3km 全程 α 顶格
+                        -- 欠升力渐进掉线 −56m 落河；v4.17 时代 55 能落是因其下滑只有 600m 瞬态。
+                        -- 用户"速度太低"论的最终数字；拉平窗自然泄速，触地预计 56~58）
+LG_SINK  = 3.5          -- 下滑道倾角 deg
+LG_ALPHA = 8            -- 接地保持迎角 deg（机头略抬，主轮先触；上局前轮先着=α塌）
+
+-- ==== SC-3b 远距进近：静态跑道表（源=resources.assets <Location>，analysis/data/runway-locations.json）====
+-- 映射=恒等：CraftProxy.cs 实锤 Latitude=>GlobalPosition.z、Longitude=>GlobalPosition.x（零偏移零变换）；
+-- 表值即 threshold 原始 x/z。此前 AUTOCAP 与表值的 ~260m 残差=出生点停在 threshold 后方（跑道轴向），非坐标变换。
+-- 表值=跑道头 threshold，alt=场地标高；单头跑道（Cochran18/Shepard×2）只建已知方向的入口。
+LG_TGT_IN  = -250       -- 道线终点（瞄准点）=threshold 沿着陆方向偏移 m（v4.66：250→−250。
+                        -- app47 实测：道线在旧瞄准点(250)前 565 m 进 45 m 拉平窗，拉平+平飘
+                        -- 共吃 1075 m → TD=threshold+760；平飘尾段（20 m 高 sink<1 m/s 悬停段）
+                        -- 是封版特性不动，瞄准点前挪 500 m → 预计 TD≈threshold+260=前 1/4。
+                        -- 负值=线终点落在 threshold 前方进近侧，数学上由 max(s,0) 兜底无害）
+LG_ENTRY   = 4000       -- 进近入口=threshold 反向外推 m
+LG_APP_ALT = 300        -- 进近段保持高（相对场地）m；复飞（lg_ga）时改 600
+LG_APP_SPEED = 65       -- 进近段平飞速度（v4.19：55 m/s 低于平飞失配平速度——α 顶格 5.2° 撑不住 1g，
+                        -- 满杆仍匀速下陷 2.4 m/s 直到海面（app2 局实锤）；65 m/s 时 α 需求 3.7° 有裕度。
+                        -- FAF 转下滑后回落 LG_SPEED=55（下滑过载<1，v4.17 已验证）
+LG_PAT_SPEED = 75       -- v4.37 程序进场段速度：65 m/s=能量死亡线（app18 带轮直线 −4 m/s 匀速下沉、
+                        -- 爬升指令兑现不了）。75 m/s 净构型有剩余推力买 ±5 m/s 爬升权和转弯掉高。
+LG_MAX_D   = 15000      -- v4.34 选跑道距离上限（到入口，m）：再远=拿 150~300 m 高度跨未知走廊瞎飞
+LG_PA_OFF  = 250        -- v4.41 程序进场高度（相对场地 m）：app21 实测 150 不够——180°+2×90°
+                        -- 拐吃掉 130 m，final 只剩 30 m agl 滑进草地。250=转弯预算 130+final
+                        -- 交接余量（LG_SF 处线高 128，接管高 ≤ 线高+120，7° 包线内正常收）。
+LG_SLOPE_MAX = 10      -- v4.43 规划/执行/FAF/接手复检统一的俯角预算上限（deg）
+LG_SF      = 2100       -- v4.34 程序进场的 final 汇入点（瞄准点沿延长线回退 m）
+RWYS = {
+	{ n="Cochran 04L", lat=-29883, lon=12873, hdg=45,  alt=3  },
+	{ n="Cochran 22L", lat=-27887, lon=15064, hdg=225, alt=3  },
+	{ n="Cochran 18",  lat=-26945, lon=14477, hdg=180, alt=3  },
+	{ n="Shepard 34",  lat=-2330,  lon=4381,  hdg=345, alt=11 },
+	{ n="Shepard 22",  lat=-2556,  lon=4340,  hdg=225, alt=11 },
+	{ n="Bannock 05",  lat=-38878, lon=6533,  hdg=50,  alt=5  },
+	{ n="Bannock 23",  lat=-37451, lon=8234,  hdg=230, alt=5  },
+	{ n="Bannock 08",  lat=-38872, lon=6204,  hdg=80,  alt=5  },
+	{ n="Bannock 26",  lat=-38681, lon=7288,  hdg=260, alt=5  },
+	{ n="Kunimitsu 1", lat=-5540,  lon=12797, hdg=10,  alt=10 },
+	{ n="Kunimitsu 19",lat=-4500,  lon=12980, hdg=190, alt=10 },
+	{ n="Kunimitsu 4", lat=-6180,  lon=12122, hdg=40,  alt=10 },
+	{ n="Kunimitsu 22",lat=-5160,  lon=12978, hdg=220, alt=10 },
+}
+lg_app = nil                         -- 进近入口点（选跑道时记录，仅日志参考）
+local a2 = math.atan2 or math.atan   -- LuaJIT=atan2；5.3=atan(y,x) 双参；5.1(无二参)=已知风险，先赌前两者
+
+function rwy_select()
+	-- v4.32 双闸候选：①入口在机头前方半球 AND ②threshold 沿跑道方向仍在机头前方 ≥300 m
+	-- AND ③v4.34 入口距离 ≤LG_MAX_D。v4.35 优先级（用户实锤：机头明明指着目标机场，
+	-- 却被派去背后最近的掉头）：**入口方位偏差 <45° 的"指向候选"优先**（其中取最近），
+	-- 无指向候选才退回全体最近——反正都要转弯，转弯掉高交给前置高逻辑。
+	local best, bd, br, be, pbest, pbd, pbr, pbe
+	for i, e in ipairs(RWYS) do
+		local r = e.hdg * math.pi / 180
+		local elat = e.lat - math.cos(r) * LG_ENTRY
+		local elon = e.lon - math.sin(r) * LG_ENTRY
+		local dN, dE = elat - craft.Latitude, elon - craft.Longitude
+		local s_thr = (e.lat - craft.Latitude) * math.cos(r) + (e.lon - craft.Longitude) * math.sin(r)
+		local berr = math.abs(wrapd(math.deg(a2(dE, dN)) - craft.Heading))
+		local d = dN * dN + dE * dE
+		if berr < 90 and s_thr > 300 and d < LG_MAX_D * LG_MAX_D then
+			if not bd or d < bd then bd, best, br, be = d, e, r, berr end
+			if berr < 45 and (not pbd or d < pbd) then pbd, pbest, pbr, pbe = d, e, r, berr end
+		end
+	end
+	if pbest then return pbest, pbr, pbe, true end
+	return best, br, be, false
+end
+
+function wrapd(a)
+	a = (a + 180) % 360
+	return a - 180
+end
+
+-- v4.49 程序生成统一成函数（按键9 降级与复飞重加入共用）：矩形程序+切线轨道，
+-- 尺寸按本机标称机动能力算（R=V²/g·tan50° @LG_PAT_SPEED），S 侧按当前偏距定。
+function build_pattern()
+	local ch0 = rwy.hdg * math.pi / 180
+	local c0, s0v = math.cos(ch0), math.sin(ch0)
+	local dn, de = rwy.lat - craft.Latitude, rwy.lon - craft.Longitude
+	local s0 = dn * c0 + de * s0v
+	local l0 = dn * s0v - de * c0
+	local R = math.max(300, math.min(1200,
+		LG_PAT_SPEED * LG_PAT_SPEED / (9.81 * math.tan(50 * math.pi / 180))))
+	local S = l0 >= 0 and 1 or -1
+	local W = math.max(900, math.min(2600, 2.5 * R))
+	local function wp_sl(sa, la)
+		return { lat = rwy.lat - (sa * c0 + la * s0v),
+		         lon = rwy.lon - (sa * s0v - la * c0) }
+	end
+	local s_wd = LG_SF + W + 2 * R + 500
+	lg_wp = { wp_sl(s_wd, S * W), wp_sl(LG_SF, S * W), wp_sl(LG_SF, 0), wp_sl(s_wd, 2 * S * W) }
+	lg_S, lg_W, lg_wd = S, W, s_wd
+	lg_wi = 1
+	lg_pa = rwy.alt + LG_PA_OFF
+	print(string.format("PATTERN BUILD S=%+d W=%.0f R=%.0f PA=%.0f s0=%.0f l0=%.0f",
+		S, W, R, lg_pa, s0, l0))
+end
+
+-- v4.62 复飞专用"跑道旁赛道"再入（用户裁定：盘旋+抬升合并、给切入延长线留足距离；
+-- 旧案复飞套用远距大盒——WP1 在 4.8 km 外、身后 10+ km 飞过去，回来没时间建立；
+-- 且 l0≈0 恒判 S=+1，复飞永远画右圈）。几何=标准左航线：越头 1.5 km 横风拐 →
+-- 下风边 l=−1400 顺路泄高到程序高 → s=3000 切 final → 2.6 km/35 s 建立窗。
+function build_ga_pattern()
+	local ch0 = rwy.hdg * math.pi / 180
+	local c0, s0v = math.cos(ch0), math.sin(ch0)
+	local S = -1
+	local W = 1400
+	local function wp_sl(sa, la)
+		return { lat = rwy.lat - (sa * c0 + la * s0v),
+		         lon = rwy.lon - (sa * s0v - la * c0) }
+	end
+	lg_wp = { wp_sl(-1500, S * W), wp_sl(4200, S * W), wp_sl(3000, 0) }
+	lg_S, lg_W, lg_wd = S, W, 4200
+	lg_wi = 1
+	lg_pa = rwy.alt + LG_PA_OFF
+	print(string.format("GA PATTERN: 左赛道 W=%d PA=%.0f RW1=(-1500,%d) RW2=(4200,%d) RW3=(3000,0)",
+		W, lg_pa, S * W, S * W))
+end
+
+function land_release()
+	local c = craft.Controls
+	c:ReleaseInput("Roll"); c:ReleaseInput("Pitch"); c:ReleaseInput("Throttle")
+	pcall(function() c:ReleaseInput("LandingGear") end)
+	pcall(function() c:ReleaseInput("Brake") end)
+	pcall(function() c:ReleaseInput("Trim") end)   -- v4.15 滑跑 trim 接棒后停稳交还
+	lg_ovr.roll = false; lg_ovr.pitch = false; lg_ovr.thr = false; lg_ovr.gear = false
+end
+
+function land_ax(axis, v)
+	craft.Controls:OverrideInput(axis, math.max(-1, math.min(1, v)))
+end
+
+-- v4.54 杆量输出平滑（app33 终审：振峰随帧率锁步移动——4.2 Hz@fs24.4、9.9 Hz@fs58.8，
+-- 均为 fs/6=采样极限环铁证；v4.53 降增益只压幅不杀机制。杆指令一阶 LPF 1 Hz，
+-- 在 4~10 Hz 振铃频段把环路增益砍到 <1，频段内相位损失换稳态）。
+lg_ufm = 0
+lg_rfm = 0   -- v4.64 stage1 滚转杆 0.8 Hz LPF 状态（同 land_pitch_ax 的 lg_ufm 纪律）
+lg_cn = false -- v4.65 能量爬升态回差旗标（>55 入 / <25 出）
+lg_lrate, lg_lprev = 0, nil   -- v4.68 侧偏率状态（收线 D 项用）
+function land_pitch_ax(u, dt)
+	lg_ufm = lg_ufm + (u - lg_ufm) * math.min(1, dt * 2 * math.pi * 1)   -- v4.54.1 2→1 Hz（用户裁定：慢 0.1 s 无所谓，换干净）
+	land_ax("Pitch", lg_ufm)
+end
+
+function land_nav(dt)
+	if not lg_on or rwy == nil then return end
+	if dt <= 0 or dt > 0.5 then dt = 0.05 end
+	local c = craft.Controls
+	-- 起落架：v4.37 推迟到 final——app18 实锤带轮飞程序=能量死刑：66 m/s 油门满、
+	-- 拉杆 0.73、gf1.0 的直线平飞仍 −4 m/s 匀速下沉，tgtA 爬到 272 也兑现不了爬升，
+	-- 180° 拐烧掉 82 m 直接入海。旧"进模式即放轮"是给 v4.17 近距按 9 的短下滑设计的。
+	-- v4.49 双向：复飞即收轮（带轮绕程序=同一死刑）；放轮增 lg_wp 门（程序段不放）。
+	if lg_ga then
+		pcall(function() c:OverrideInput("LandingGear", -1) end)   -- 轴 −1=收（零件映射 min=1/max=0）
+		lg_ovr.gear = false
+	elseif not lg_ovr.gear then
+		local ch_ = rwy.hdg * math.pi / 180
+		local s_ = (rwy.lat - craft.Latitude) * math.cos(ch_) + (rwy.lon - craft.Longitude) * math.sin(ch_)
+		if lg_stage >= 2 or (not lg_wp and s_ < 1500) then
+			pcall(function() c:OverrideInput("LandingGear", 1) end)
+			lg_ovr.gear = true
+		end
+	end
+	local ch = rwy.hdg * math.pi / 180
+	local dN = rwy.lat - craft.Latitude
+	local dE = rwy.lon - craft.Longitude
+	local dist = math.sqrt(dN * dN + dE * dE)
+	local l  = dN * math.sin(ch) - dE * math.cos(ch)      -- 右偏距
+	local s  = dN * math.cos(ch) + dE * math.sin(ch)      -- 沿跑道方向（向前=朝触地点）
+	local eps_h = wrapd(rwy.hdg - 0.02 * l - craft.Heading)
+	if lg_stage >= 2 then
+		-- v4.22 横向容错；v4.30 增胆（用户"下滑放不开手脚"实锤：app11 l 过零冲 +33 后
+		-- 0.03°/m×33m=1°×0.010=0.6° 坡度=无力回线，挂偏落地）：前置对齐进近段 0.06°/m、
+		-- 钳 ±12° 限坡度、滚转增益 0.014、积分 0.004——ψ̇ 阻尼原样压阵防 S 摆。
+		if lg_stage == 2 and math.abs(l) < 300 then
+			lg_lint = math.max(-5, math.min(5, lg_lint - l * dt * 0.004))
+		end
+		local psi_tgt = rwy.hdg - math.max(-12, math.min(12, 0.06 * l)) + lg_lint
+		local eps_c = wrapd(psi_tgt - craft.Heading)
+		yrf = yrf + (craft.YawRate - yrf) * math.min(1, dt * 2 * math.pi * 1.5)
+		land_ax("Roll", math.max(-0.45, math.min(0.45, 0.014 * eps_c - 0.018 * yrf)))   -- v4.57 ψ̇ 阻尼 0.012→0.018（app37B 下滑坡度 ±25~37° 泵动，与 stage1 对齐）
+		lg_ovr.roll = true
+	end
+	-- 触地判据（v4.27 签名时序修正）：agl<4 触发照旧，但 stable/jerk 在触发瞬间量不出来
+	-- （那时还在下沉、主轮冲击未发生，app9 局 stable=0 jerk=0 是时序错不是真异常）——
+	-- 挪到触发后 1.0 s 评估一次；rwy 位置核对仍在触发当帧（app8 河面教训：agl 不挑地面）。
+	if lg_stage == 2 then
+		-- v4.43 地形保险（app22 实锤：Kunimitsu 3.5° 线插进跑道头前 1.2 km 的山坡，
+		-- TD 报 SHORT 1224 m 翻扣）：下滑段 agl<25 而离瞄准点还远=线被山吃了→转复飞。
+		if craft.AltitudeAgl < 25 and s > 800 and not lg_ga then
+			lg_ga = true; lg_stage = 1
+			print(string.format("TERRAIN GUARD: agl=%.0f s=%.0f -> GO-AROUND", craft.AltitudeAgl, s))
+		end
+		-- v4.55 离线 abort（地形保险的横向孪生）：下滑态大侧偏/大航向差=超出下滑律职权。
+		-- v4.61 收紧（app42：风推偏出跑道仍不 abort——旧阈 300 m 比跑道宽一倍，等于纵容
+		-- 落外）：|l|>150 即回；s<800 决断窗内按触地判据 ±90 收紧。agl>60 门=低空不松杆。
+		if (math.abs(l) > 150 or (s < 800 and math.abs(l) > 90)
+			or math.abs(wrapd(rwy.hdg - craft.Heading)) > 20)
+			and craft.AltitudeAgl > 60 and not lg_ga then
+			lg_ga = true; lg_stage = 1
+			print(string.format("GLIDE ABORT: l=%.0f eps=%.0f agl=%.0f -> GO-AROUND",
+				l, wrapd(rwy.hdg - craft.Heading), craft.AltitudeAgl))
+		end
+		local agl_rate = (craft.AltitudeAgl - lg_agl_prev) / dt
+		lg_agl_prev = craft.AltitudeAgl
+		lg_pr_pk = math.max(lg_pr_pk * (1 - dt * 0.8), math.abs(craft.PitchRate))
+		if craft.AltitudeAgl < 4 or (agl_rate > -0.5 and lg_pr_pk > 5 and craft.AltitudeAgl < 7) then
+			lg_stage = 4
+			lg_t0 = craft.Time
+				lg_sig = { t0 = craft.Time, agl0 = craft.AltitudeAgl, pr0 = lg_pr_pk }
+				-- v4.41 道面判定按本跑道实长（app21 实锤旧包线 -300<s<3400 是给 2.2 km Cochran
+				-- 定的；1 km 山区条 s=+800 落跑道头前 400 m 还报 rwy=1=假证）。s 以瞄准点
+				-- (=threshold+400 内)计，道面=[400-len,400]，容差短头 150 / 冲出 300。
+				local len = rwy.len or 2000
+				local ok_lat = math.abs(l) < 90
+				-- v4.66 阈值随 LG_TGT_IN 联动（旧硬写 400=v4 时代遗产，TGT_IN 已两度改值没人接账）
+				local short = s - LG_TGT_IN
+				local ok_lon = short <= 150 and s >= LG_TGT_IN - len - 300
+				local tag = (not ok_lat) and "  OFF-RWY (lateral)!"
+					or (short > 150 and string.format("  SHORT OF RWY (%dm before threshold)!", short)
+					or (not ok_lon and "  OVERSHOOT PAST FAR END!" or ""))
+				print(string.format("TOUCHDOWN agl=%.1f ias=%.0f rwy=%d%s",
+					craft.AltitudeAgl, craft.IAS, (ok_lat and ok_lon) and 1 or 0, tag))
+		end
+	end
+	if lg_stage == 4 then
+		land_ax("Throttle", 0)
+		pcall(function() c:OverrideInput("Brake", 1) end)
+		lg_ovr.thr = true
+		-- v4.16 trim 提前到接地判据触发瞬间（v4.15 定罪：trim 挂在松杆时=1.5 s 后，
+		-- 前轮 44.1 已拍地、trim 44.6 才来）；与保持杆并存期=双上仰，抗 1.2g 减速低头力矩。
+		pcall(function() c:OverrideInput("Trim", -0.2) end)
+		if lg_ovr.pitch and lg_t0 and craft.Time - lg_t0 > 1.5 then
+			c:ReleaseInput("Pitch"); lg_ovr.pitch = false
+		end
+		-- v4.49 TD-SIG 时序定案（app19~26 连报 stable=0 jerk=0 全 MISMATCH=判据错非机体）：
+		-- ①触发帧（agl<4）还在 ~2.8 m/s 最后收敛下沉，+1 s 仍对比触发帧必吃自然落高 → stable 恒0；
+		--   稳定窗改 +1 s→+2 s（主轮已载地）。②俯仰率冲击峰在触发之后，lg_pr_pk 旧版仅 stage2
+		--   更新 → jerk 恒0；stage4 续更。双虚警除。
+		lg_pr_pk = math.max(lg_pr_pk * (1 - dt * 0.8), math.abs(craft.PitchRate))
+		if lg_sig and not lg_sig.done then
+			if craft.Time - lg_sig.t0 > 1.0 and not lg_sig.a1 then
+				lg_sig.a1 = craft.AltitudeAgl
+			elseif lg_sig.a1 and craft.Time - lg_sig.t0 > 2.0 then
+				lg_sig.done = true
+				local st = math.abs(craft.AltitudeAgl - lg_sig.a1) < 1.5
+				local jk = lg_pr_pk > 3
+				print(string.format("TD-SIG stable=%d jerk=%d%s", st and 1 or 0, jk and 1 or 0,
+					(st and jk) and "" or "  TD-SIG MISMATCH!"))
+			end
+		end
+		if craft.IAS < 5 or (lg_t0 and craft.Time - lg_t0 > 40) then
+			land_release()
+			lg_on = false; lg_stage = 0
+			print("ROLLOUT COMPLETE — 停稳，着陆收工")
+		end
+		if math.fmod(_frame, 10) == 0 then
+			print(string.format("LAND,%.3f,4,%.0f,%+.1f,%.0f,%.0f,%.2f,%.0f,%+.0f",
+				craft.Time, dist, eps_h, rwy.alt, craft.Altitude,
+				craft.Controls.Throttle, craft.IAS, l))
+		end
+		return
+	end
+	-- ==== SC-3b 进近段（stage1）：v4.21 变前置角截获 + 紧闸门（用户裁定现实程序：
+	-- 先汇入延长线、稳定沿线平飞，FAF 才下道）。旧渐进 0.02°/m 律=指数尾巴，
+	-- 2.4 km 侧偏 8 km 收不完、带 −120 m 偏角落山丘（app4 实锤）。
+	if lg_stage == 1 then
+		-- 变前置角截获：ψ_cmd = 跑道方位 − clamp(0.06°/m·l, ±30°)。
+		-- 教训链：30° 恒角=末段急收"摆动"（v4.23 改 20°）→ 20° 配 0.04 前置在 l≈1.25 km
+		-- 出现截获角=前置角的**平行巡航**（l 每秒只收 1 m，app7 实锤）→ 回 30° 钳+0.06 增益
+		-- 保证任何偏距都在 ~2 km 内真正截线。
+		local psi_cmd
+		-- v4.68 侧偏率状态（收线 D 项）：l 为 land_nav 顶部公共跑道系量，1.2 Hz LPF。
+		if lg_lprev == nil then lg_lprev = l end
+		lg_lrate = lg_lrate + ((l - lg_lprev) / math.max(dt, 0.01) - lg_lrate) * math.min(1, dt * 2 * math.pi * 1.2)
+		lg_lprev = l
+		-- v4.48 (app25 三案同修)：① 入轨不等 WP1——进下风带(|l−S·W|<600)第一拍即入圆，
+		-- 圆心=当前 s 的 (s, S·W)（用户：盘旋第一秒就该开始）；② 纯追踪 55° 前置有固有抄近道
+		-- 稳态半径≈0.89W → 圆碰不到线、|l|<150 永假 → 转 7 min 超时强放撞山(app25 实锤)。
+		-- 目标半径补偿 ×1.15(稳态≈1.02W 真穿线)，释放放宽 |l|<0.5W 且航向差<45°；
+		-- ③ 释放时把剖面拍平到程序高，防旧 plan 拽重爬。
+		local function wpf(sa, la)
+			return { lat = rwy.lat - sa * math.cos(ch) - la * math.sin(ch),
+			         lon = rwy.lon - sa * math.sin(ch) + la * math.cos(ch) }
+		end
+		local function orbit_enter(at_s)
+			lg_oc = wpf(at_s, lg_S * lg_W)
+			lg_oe = wpf(at_s, 2 * lg_S * lg_W)
+			lg_orb = true; lg_orb_entry = true
+			lg_orb_t0 = craft.Time
+			lg_loop = (lg_loop or 0) + 1
+			print(string.format("ORBIT ENTER: 高%.0f 未到位(程序高+80)，切线圆消高 lap %d (s=%.0f)",
+				craft.Altitude, lg_loop, at_s))
+		end
+		if lg_wp and lg_orb then
+			local C = lg_oc or lg_wp[1]
+			if lg_orb_entry then
+				local ep = lg_oe or lg_wp[4]
+				local eN, eE = ep.lat - craft.Latitude, ep.lon - craft.Longitude
+				if eN * eN + eE * eE < 400 * 400 then
+					lg_orb_entry = false
+					print("ORBIT CAPTURED (远切点入圆)")
+				else
+					psi_cmd = wrapd(math.deg(a2(eE, eN)))
+				end
+			end
+			if lg_orb and not psi_cmd then
+				local dN, dE = craft.Latitude - C.lat, craft.Longitude - C.lon
+				local rr = math.sqrt(dN * dN + dE * dE)
+				if rr < 1 then rr = 1 end
+				local a = lg_S * 55 * math.pi / 180
+				local ca, sa = math.cos(a), math.sin(a)
+				local rho = lg_W * 1.15
+				local oN, oE = (dN * ca - dE * sa) * rho / rr, (dN * sa + dE * ca) * rho / rr
+				psi_cmd = wrapd(math.deg(a2(C.lon + oE - craft.Longitude, C.lat + oN - craft.Latitude)))
+			end
+			if lg_orb and craft.Altitude <= (lg_pa or (rwy.alt + LG_APP_ALT)) + 80
+				and math.abs(l) < 0.5 * lg_W
+				and math.abs(wrapd(rwy.hdg - craft.Heading)) < 45 then
+				lg_orb = nil; lg_wp = nil
+				lg_plan = { pf = LG_SF, A = rwy.alt + LG_PA_OFF, t = 0 }
+				print(string.format("ORBIT RELEASE @tangent s=%.0f l=%.0f -> LINE CAPTURE", s, l))
+			elseif lg_orb and craft.Time - (lg_orb_t0 or craft.Time) > 480 then
+				lg_orb = nil; lg_wp = nil
+				lg_plan = { pf = LG_SF, A = rwy.alt + LG_PA_OFF, t = 0 }
+				print("ORBIT RELEASE (超时 8min 强制)")
+			end
+		elseif lg_wp then
+			-- v4.34 程序进场模式：纯追踪飞当前航点（坡度限制器兜底，转弯天然有界），
+			-- 最后一点（final 汇入=已在线上）到达后切回截获律。
+			-- v4.66 进一触发 250 m 改切点提前量（用户"不能过线才开始转弯"的拐角侧）：
+			-- r=V²/13.5 实测标定，Δψ 转角所需提前=r·tan(Δ/2)，钳 [250, 0.6×下一腿长]
+			-- 防超前切换；90° 拐角@75 m/s→提前≈430 m，旧 250=过拐点才起转甩出 200 m 外。
+			local wp = lg_wp[lg_wi]
+			local wN, wE = wp.lat - craft.Latitude, wp.lon - craft.Longitude
+			local rl = 250
+			local nx = lg_wp[lg_wi + 1]
+			if nx then
+				local dang = math.abs(wrapd(math.deg(a2(nx.lon - wp.lon, nx.lat - wp.lat))
+					- math.deg(a2(wE, wN))))
+				local legn = math.sqrt((nx.lat - wp.lat)^2 + (nx.lon - wp.lon)^2)
+				rl = math.max(250, math.min(0.6 * legn,
+					craft.GS * craft.GS / 13.5 * math.tan(math.min(dang, 120) / 2 * math.pi / 180)))
+			end
+			if lg_wi == 1 and craft.Altitude > (lg_pa or (rwy.alt + LG_APP_ALT)) + 80
+				and s > LG_SF + 1200 and math.abs(l - lg_S * lg_W) < 600 then
+				orbit_enter(s)   -- v4.48 进带即入圆，不等 WP1
+			elseif wN * wN + wE * wE < rl * rl then
+				if lg_wi == 1 and craft.Altitude > (lg_pa or (rwy.alt + LG_APP_ALT)) + 80 then
+					orbit_enter(s)   -- WP1 兜底入圆
+				elseif lg_wi == 1 then
+					lg_wi = 2
+					print("PATTERN WP2 reach")
+				elseif lg_wi == 2 then
+					lg_wi = 3
+					print("PATTERN WP3 reach")
+				else
+					-- v4.43 圈末复检：下滑律能否在触地前接住线（缺口≤(tan10−tan3.5)·s）；
+					-- 接不住=再绕一圈消高（app22 用户裁定：提示盘旋消高就真给它自动盘旋）。
+					local line_a = rwy.alt + math.tan(3.5 * math.pi / 180) * math.max(s, 0)
+					local gap = craft.Altitude - line_a
+					local budget = (math.tan(LG_SLOPE_MAX * math.pi / 180) - math.tan(3.5 * math.pi / 180)) * math.max(s, 0)
+					if gap <= budget or (lg_loop or 0) >= 6 then
+						lg_wp = nil
+						print("PATTERN COMPLETE -> LINE CAPTURE")
+					else
+						lg_loop = (lg_loop or 0) + 1
+						lg_wi = 1
+						print(string.format("PATTERN LAP %d: 高线 %.0f m 超预算 %.0f m，再绕一圈", lg_loop, gap, budget))
+					end
+				end
+			end
+		end
+		if not (lg_wp and lg_orb) then
+			if lg_wp then
+				local wp = lg_wp[lg_wi]
+				psi_cmd = wrapd(math.deg(a2(wp.lon - craft.Longitude, wp.lat - craft.Latitude)))
+			else
+				-- v4.67 撤销 v4.66 滑切点律（app49 定罪：目标点恒钉在线上→指令切入角在
+				-- l→0 前永不回零，**结构上必过线**——实测 −42.7° 穿越、+214 m 过冲后
+				-- 再 20° 穿回=S 阻尼曲线，用户"转向还是有超调"的几何根因）。换回 v4.62
+				-- 双调度前置角（当年两项定罪均已别处解决：滚转振荡→v4.65 坡度内环根治、
+				-- 起转太晚→拐角 r_lead 分担；此律收敛形状 app44 实测 l 1900→−5 m/50 s）。
+				-- v4.68 加 D 项（app50 残留 S 弯：穿越 33.8°/过冲 135 m——纯 P 对"快速
+				-- 逼近"不提前卸载，实际链路坡度内环+杆 LPF+偏航阻尼合成滞后 ~4-6 s，
+				-- 仿真证明滞后越大穿越角越大）。l_eff = l + 2.5·l̇：收线快=虚拟提前反向，
+				-- 远段权限不变（app43 决断窗账维持），近线切入角自动收小甚至反预偏。
+				local l_eff = l + 2.5 * lg_lrate
+				local ale = math.abs(l_eff)
+				local lead = math.min(30, 0.06 * ale) + math.min(14, 0.12 * ale)
+				psi_cmd = rwy.hdg - math.max(-40, math.min(40, lead * (l_eff > 0 and 1 or -1)))
+			end
+		end
+		local eps1 = wrapd(psi_cmd - craft.Heading)
+		yrf = yrf + (craft.YawRate - yrf) * math.min(1, dt * 2 * math.pi * 1.5)
+		-- v4.65 滚转加坡度内环（app46 定罪=用户诊断"没有提前收杆的设计，硬靠阻尼收敛"：
+		--   旧律 杆=0.010·方位差−0.018·偏航率 是航向误差直出杆——杆→坡度→航向双积分，
+		--   线捕获段 ra 钉 51~66°、rr ±35°/s 方波极限环，全靠限幅器踩刹车）。新律：
+		--   φ_c=clamp(−(eps−1.5·yrf),±55)，杆=−0.010·(φ_c−φ)+0.004·rr。符号律：杆正→坡度负
+		--   （v4.33 验尸）→方位修正映射到坡度目标必须取负（φ_c 负=右坡=航向增，与旧律
+		--   一阶项同向）；速率项正号=对任何滚转减速（杆正→负滚转加速度）。φ 逼近 φ_c 时
+		--   误差项自动反号回杆=结构上提前收杆，不再等航向过冲才醒。
+		local phi_c = math.max(-55, math.min(55, yrf * 1.5 - eps1))
+		local roll_cmd = -0.010 * (phi_c - craft.RollAngle) + 0.004 * craft.RollRate
+		-- v4.33 坡度限制器（v4.32 版符号写反=火上浇油，app15 实锤：本机制把 +0.15 的改平
+		-- 指令翻成 −0.45 满杆继续加深，两局都从 70° 堆到 150~180° 倒扣螺旋）。
+		-- 本机滚转约定：杆正→坡度负（左倾正 φ 需正杆改平）。>70° 无条件回平，55~70° 冻结加深。
+		local phi_now = craft.RollAngle
+		if math.abs(phi_now) > 70 then
+			roll_cmd = 0.01 * phi_now
+		elseif math.abs(phi_now) > 55 and phi_now * roll_cmd < 0 then
+			roll_cmd = 0.004 * phi_now   -- v4.62 冻结改浅出翼（app43：59° 坡冻结=原地画圈
+										  --   一整圈 l 甩到 −1086；律还要加深说明在追大偏差，
+										  --   此时缓出翼让坡度随 eps 收敛自然回建）
+		end
+		-- v4.64 滚转杆平滑 0.8 Hz（app45"转弯中一抖一抖"：WP 纯追踪近距方位率爆炸+限幅器
+		-- 带界切换=杆 bang-bang，ra ±25~55° 3~4 s 抖振）——人手等效，只罩 stage1。
+		lg_rfm = lg_rfm + (roll_cmd - lg_rfm) * math.min(1, dt * 2 * math.pi * 0.8)
+		land_ax("Roll", math.max(-0.45, math.min(0.45, lg_rfm)))
+		lg_ovr.roll = true
+		-- v4.37 程序段提速到 LG_PAT_SPEED：vv 环要的 ±5 m/s 爬升权是能量买来的——
+		-- 65 m/s 带轮=零剩余推力（app18 直线匀速下沉实锤）；净构型+75 m/s 才有拐点爬升。
+		-- v4.52 目标高/vv 预算上提到速度环之前——能量债判据要用 vv_t。
+		-- v4.40 目标高=接管时规划的剖面线（A_pf + tan·(s−切线点)），死平台废除：
+		-- 高接管自动早降、平接管=平台巡航，职责=在切线点把「位+高」交到位。
+		local tgtA
+		if lg_ga then
+			tgtA = rwy.alt + 600
+		elseif lg_plan then
+			tgtA = lg_plan.A + lg_plan.t * math.max(s - lg_plan.pf, 0)
+		else
+			tgtA = rwy.alt + (lg_pa or LG_APP_ALT)
+		end
+		-- v4.35 转弯前置高（用户实测：180° 转向≈掉 200 m，掉线后追不上=偶尔掉水里）。
+		-- 目标高随当前航向误差预支（1.1 m/°，钳 220），转弯出弯 eps1 收敛时自然沿螺旋降回程序高。
+		if lg_wp and not lg_ga then
+			-- v4.44 程序段 tgtA 以程序高封顶（剖面只管初段下降；不封顶则绕圈被 s 函数
+			-- 忽上忽下=app23 套索），转弯前置高照旧叠加。
+			-- v4.62 前置高输入钳 60°（app43 实锤：过冲回线 eps1=128° → comp 虚增 141 m
+			-- → climb_need 误判钉满油 → 速度 88 下不来 → 过冲更深的正反馈泵）。
+			tgtA = math.min(tgtA, lg_pa or tgtA) + math.min(66, 1.1 * math.min(math.abs(eps1), 60))
+		end
+		-- v4.36 stage1 高度环 vv 目标结构 + v4.40 下沉预算 −GS·tan(LG_SLOPE_MAX)（钳位与规划同域）。
+		-- v4.51 爬升侧能量闸门（app28 六连沉实锤：59~64 m/s 接管追 tgtA+30 m 的 +5 m/s
+		-- 爬升指令，E1 在平飞下限以下零剩余推力→拉杆=换阻力，64→31 m/s 掉进阻力桶自持点
+		-- 37 m/s≈134kph 滑翔入海）。爬升预算按空速分档：攒够速度才许还高度（用户手动动作入律）。
+		local vv_climb = 6
+		if craft.IAS < 62 then vv_climb = lg_ga and 0 or -8   -- 桶底全力压头换速（app29：−2 太文气，
+		elseif craft.IAS < 70 then vv_climb = 7               -- v4.68 再抬 4→7：app50 人卡补全——
+		elseif craft.IAS < 78 then vv_climb = 8 end           --   满油 pa+17.9°@46 持续 +10.4×64 s、
+		                                                      --   pa7.5@75 只 +3~5：爬坡能力在低速大
+		                                                      --   姿态侧，62~70 档旧预算砍半（用户"爬升率还是太低"）
+		local vv_t = math.max(-craft.GS * math.tan(LG_SLOPE_MAX * math.pi / 180),
+			math.min(vv_climb, 0.10 * (tgtA - craft.Altitude)))
+		-- v4.52 能量债豁免（app30 实锤：接管初 IAS 67 落 61~68 油门死区、thr 冻 0.52，
+		-- vv 环要 +1 m/s 实际 −1.9 持续 130 s——速度环高度环互不买单，漏高 255 m 入海于
+		-- s=8948。要爬而爬不动=功率债：油门无视速度带推、减速板禁开，stage2 v4.28 同款补票）。
+		local sp = lg_wp and LG_PAT_SPEED or LG_APP_SPEED
+		-- v4.58① 开关 80→40 m（app38：高差 75~77 恰好卡在 80 死区下沿，P 环阻力坑复发）。
+		-- v4.63 拆自杀闸（app44：ias<sp+6 中 sp 在 GA 态=65 → 门槛 71 恰锁死最佳爬升速 71，
+		--   能量爬升永不触发、GA 140 s 零爬升降 119→3 撞水）：爬升窗不设速度上限，
+		--   超速由能量爬升的姿态公式自己收（快=多拉换高），下限 66 保命保留。
+		-- v4.65 单阈值改回差（app46 铁证：高差 39.5~40.4 m 骑 40 线每 2.6 s 翻一次开关→
+		--   cmd 在 vv 环 ~2° 与能量式 ~5° 间硬跳 + ff 0↔0.3 同步翻转=平飞"升降舵抖一下—
+		--   稳定—又抖一下"的真身）。>55 入 / <25 出，中间带沿用上一态。
+		if tgtA - craft.Altitude > 55 and craft.IAS > 66 then lg_cn = true
+		elseif tgtA - craft.Altitude < 25 then lg_cn = false end
+		local climb_need = lg_cn
+		-- v4.52 能量债豁免（app30 实锤：vv 要 +1 实际 −1.9 持续 130 s 无人买单漏高 255 m
+		-- 入海）。爬升需求兑现不了=功率债：油门无视速度带推、减速板禁开。
+		local energy_debt = climb_need or (vv_t > 0.5 and alf < vv_t - 1 and craft.IAS < sp + 3)
+		local thr = c.Throttle
+		-- v4.63 油门改比例斜坡（app44 实测 bang-bang 在 68/71 边界 10 秒反向 11 次=用户
+		-- "油门震荡"实锤）：按速度误差比例收放，±1 m/s 死区，速率仍限 [−0.4,+0.5]/s。
+		-- v4.65 死区放宽+速率放慢（app46 E 段实锤：IAS 对油门的响应迟滞 5~8 s，±1 死区配
+		--   0.4~0.5/s 速率=环路比被控对象快 5 倍→0↔1 满幅锯齿 10 s 周期="还是荡来荡去"。
+		--   环路慢于滞后才有稳定可言：±2.5 m/s 死区、斜率 0.05、速率上限 0.25/s）。
+		if climb_need then
+			thr = math.min(1, thr + 0.5 * dt)                       -- 爬升=满油，速度归姿态管（人卡）
+		else
+			local err = sp - craft.IAS
+			if err > 2.5 or (energy_debt and err > -1) then
+				thr = math.min(1, thr + math.min(0.25, err * 0.05 + 0.08) * dt)
+			-- v4.67 有爬升需求禁收油（app49 t=18~30 定罪：ias 68 差 3 m/s 踩下沿→thr 掉 0.31，
+			--   同时 vv 环还要 +4 m/s 爬升=速度换高的能量漏斗，ias 68→27 险入阻力桶；
+			--   debt 豁免门 ias<sp+3 在 66~68 恰留缝，改按 vv 需求直接闸住下收侧）。
+			elseif err < -2.5 and vv_t < 1 then
+				thr = math.max(0, thr + math.max(-0.25, err * 0.05) * dt)
+			end
+		end
+		land_ax("Throttle", thr)
+		lg_ovr.thr = true
+		local brk_t = math.max(0, math.min(1, (craft.IAS - sp - 1) / 8))
+		if craft.IAS < sp - 4 or energy_debt then brk_t = 0 end
+		lg_brk = lg_brk + (brk_t - lg_brk) * math.min(1, dt * (brk_t > lg_brk and 1 or 4))
+		pcall(function() c:OverrideInput("Brake", lg_brk) end)
+		local phi = math.abs(craft.RollAngle)
+		if phi > 60 then phi = 60 end
+		local bank_comp = 3.0 * (1 / math.cos(phi * math.pi / 180) - 1)
+		local cmd_deg
+		if climb_need then
+			-- v4.59 人卡定参（app40：手动 GA 钉姿态 +9°@71 m/s → vv −13.6→+6 仅 2 s、持续 6~8 m/s）：
+			-- 人命令姿态、环命令速率——vv 环追不上就僵（app36/37 自锁病根）。
+			-- v4.68 人卡补全重锚（app50：满油 pa+17.9°@46 持续 +10.4 m/s×64 s、pa7.5@75 只
+			-- +3~5——爬坡本钱在低速大姿态侧）。cmd=clamp(0.9(IAS−52),−2,16)：与卡线交点
+			-- ≈64.6 m/s/pa11.4 → 平衡 vv≈+8（用户要 4~9 正中）；**慢于 52 自动压杆**——
+			-- 纯卡线斜率（−0.36/IAS）在 46 以下变"越慢越拉杆"=app36/44 mush 死向，安全否决。
+			cmd_deg = math.max(-2, math.min(16, 0.9 * (craft.IAS - 52))) + bank_comp
+		else
+			cmd_deg = 1.5 * (vv_t - alf) + bank_comp
+			-- v4.56 爬升侧姿态顶（app36：tgtA 误差 250 m 恒饱和→11° 猛拉杆→90→31 m/s
+			-- 换高→mush 入水；爬升需求下杆量上限 +8°——能量是油门的事，杆不许透支）。
+			if vv_t > 0.5 and cmd_deg > 8 then cmd_deg = 8 end
+			cmd_deg = math.max(-15, math.min(15, cmd_deg))
+		end
+		qf = qf + (craft.PitchRate - qf) * math.min(1, dt * 2 * math.pi * 4)          -- v4.53 2→4 Hz：让阻尼看得见 4.2 Hz 振铃（旧 2 Hz 滤波在振铃频点衰减 60%=没阻尼）
+		-- v4.64 爬升态姿态前馈（app45 实锤：cmd 12° 而 pa 钉 3.3° 全程——机体升降舵律
+		-- surface=PID(-10·axis,θ) 的静态配比 + P-only 内环 = 姿态权限只有 0.31 倍，
+		-- 爬升大指令直接撞墙（半舵墙的 P-only 残余）。前馈按满权限折算，只进爬升窗，
+		-- 封版下滑环不动。）
+		local ff = climb_need and -0.055 * cmd_deg or 0
+		land_pitch_ax(-KAP_P * (cmd_deg - craft.PitchAngle) - KAP_Q * qf + ff, dt)
+		lg_ovr.pitch = true
+		-- FAF 闸门（v4.25 定版）：闸门只管"线干不干净"，收线是截获律的活——
+		-- app7 纯位置窗+慢律=永远进不去干过跑道；app8 收线窗=放 399 m 侧偏进下滑，
+		-- 大角度侧飞转弯吃掉升力、实际 5.6° 道落进河里（TOUCHDOWN≠跑道上，判据不挑地面！）。
+		-- 现截获律 0.06/30° 保证 ~2 km 内切线（app6 实证 s=2614/l=−55），闸门 |l|<100 且航向 ±5°。
+		-- FAF 闸门（v4.31 死锁根治）：onPath 上限从「3.5°线高+30」放宽到 **7°俯冲包线**
+		-- （=标高+30+tan7°·s，即"以允许的最大下沉还追得上瞄准点"）。v4.28 的 3.5°+30 判据
+		-- 在"高 60 m 进道"时永远拒收→飞机等高 221 咬死 l=0 干过整条跑道 165 s（app13 实锤）。
+		local onLine = math.abs(l) < 100 and math.abs(wrapd(rwy.hdg - craft.Heading)) < 5
+		-- v4.41 低侧闸门：低于线 60 m 不交接（app21 在 s1402/agl28 就 CAP，下滑律拿着
+		-- 追不上的线高一路贴地滑进草地）。太低就留在 stage1 沿 tgtA 爬，追上再交。
+		local onPath = craft.Altitude >= rwy.alt + 20
+			and craft.Altitude >= rwy.alt + math.tan(3.5 * math.pi / 180) * math.max(s, 0) - 60
+			and craft.Altitude <= rwy.alt + 30 + math.tan(LG_SLOPE_MAX * math.pi / 180) * math.max(s, 0)
+		-- v4.58③ 建立门（app38：final 甩钟摆，闸门在摆过线的当帧放行——接手即继承
+		-- ±50° 坡度振荡，TD 偏 100 m）。条件须连续成立 2 s 才交接，荡秋千不给钥匙。
+		if not lg_wp and not lg_ga and s < LG_ENTRY + 500 and s > -300 and onLine and onPath then
+			if not lg_est_t then
+				lg_est_t = craft.Time
+			elseif craft.Time - lg_est_t >= 2.0 then
+				lg_stage = 2
+				lg_vg, lg_alt_prev, lg_fint, lg_lint = 0, craft.Altitude, 0, 0
+				print(string.format("APP CAP s=%.0f l=%.0f agl=%.0f -> GLIDE", s, l, craft.AltitudeAgl))
+			end
+		else
+			lg_est_t = nil
+		end
+		-- 复飞兜底：越过头仍未截获（太高/太歪追不上）→ GA：沿延长线中线爬 600。
+		-- v4.49 挂账收口：到高后自动重建程序进场重加入（返场航段 lg_wp 在，闸门防二次签 GA）。
+		-- v4.61 稳定进近判据（用户裁定：条件不满足就直接复飞，别拖到越头）：
+		-- s≤1500（约 20 s 决断窗）仍未建立 → 签 GA。判据用放宽的"决断窗"（|l|<200、
+		-- 航向<12°、在道上），不用 FAF 严门——否则切线圆释放后正常收线会被误杀成 GA 死循环。
+		local est_soft = math.abs(l) < 200 and math.abs(wrapd(rwy.hdg - craft.Heading)) < 12 and onPath
+		if s <= 1500 and not lg_ga and not lg_wp and not est_soft then
+			lg_ga = true
+			print(string.format("UNSTABLE @s=%.0f l=%.0f alt=%.0f -> GO-AROUND（未建立，不拖到越头）", s, l, craft.Altitude))
+		end
+		if s <= -300 and not lg_ga and not lg_wp then
+			lg_ga = true
+			print(string.format("GO-AROUND s=%.0f alt=%.0f（未建立，沿中线爬升脱离；按9解除）", s, craft.Altitude))
+		end
+		if lg_ga then
+			tgtA = rwy.alt + 600
+			-- v4.62 重加入提前（用户判旧链"爬一万年再掉头、回来不够长"）：越头 1.2 km
+			-- 且过 350 m 即转——爬升并入转向，之后走复飞专用左赛道（build_ga_pattern）。
+			if s <= -1200 and craft.Altitude >= rwy.alt + 350 and not lg_wp then
+				lg_ga = nil
+				lg_plan = { pf = LG_SF, A = rwy.alt + LG_PA_OFF, t = 0 }
+				lg_loop = 0
+				build_ga_pattern()
+				print("GA REJOIN -> PATTERN（复飞到高，自动重入程序进场）")
+			end
+		end
+		if math.fmod(_frame, 10) == 0 then
+			-- v4.23：eps 列改打真实指令误差 eps1（旧版误打 0.02°/m 参考式=诊断误导）
+			print(string.format("APP,%.3f,%.0f,%+.1f,%.0f,%.0f,%.2f,%.0f,%+.0f",
+				craft.Time, s, eps1, tgtA, craft.Altitude,
+				craft.Controls.Throttle, craft.IAS, l))
+		end
+		return
+	end
+	-- 下滑（唯一飞行段）：无阶段机、无能量守卫（SC-1 实测 0 速不失速）
+	-- v4.3：路径环换下沉率环（−GS·tan3.5°，方向无关）。旧 tgt=rwy.alt+slope·dist 在
+	-- "跑道上方按9、飞离捕获点"的实飞形态下是越飞越高的幻影线（tgt 59 vs 实高 7），
+	-- 路径项独吞满杆、α-hold 名存实亡（v4.2 定罪）。
+	local slope = math.tan(LG_SINK * math.pi / 180)
+	local tgt = rwy.alt + slope * dist          -- 仅遥测参考列
+	local vg = (craft.Altitude - lg_alt_prev) / dt
+	lg_vg = lg_vg + (vg - lg_vg) * math.min(1, dt * 2 * math.pi * 1.5)
+	lg_alt_prev = craft.Altitude
+	-- v4.28 高度-到位（altitude-to-go，用户裁定"延长线带高度"）：线高=标高+tan3.5°·s，
+	-- 单调锁只降不升（防 v4.3 幻影线：飞离场景冻结不追）；下沉指令=道名义下沉+线高误差修正
+	-- （低于线允许 +2 m/s 缓爬回线——app10 纯下沉律掉线无救的根治）。
+	local tgt_line = rwy.alt + slope * math.max(s, 0)
+	lg_tgt_lock = math.min(lg_tgt_lock or math.huge, tgt_line)
+	local sink_cmd = math.max(-craft.GS * math.tan(LG_SLOPE_MAX * math.pi / 180),
+		math.min(2.0, (lg_tgt_lock - craft.Altitude) / 8 - craft.GS * slope))
+	-- 速度包络分工（用户裁定：板只管超速、油门只管低速，禁互搏；v4.9 曾让 sink_bad 缴械刹车
+	-- →64~69 放飞案，已废）。v4.11 拧紧：收油门 >58、板 >56 开 64 满（v4.10 的 55~63 三不管带漏能）；
+	-- 加油门只在低速侧（<51 或 债且<55）。
+	local thr = c.Throttle
+	local sink_bad = lg_vg < sink_cmd - 1
+	-- v4.64 下滑油门 bang-bang→比例斜坡（app45 用户："下滑道过程油门还是荡来荡去"）：±3~4 硬死区
+	-- 配定速率 0.4~0.5/s=整带锯齿往返；与 stage1 v4.63 同款处理——误差比例折速率、±1 小死区，
+	-- 目标附近自然趋零。agl<30 收光（retard）规则不动；刹车包络分工（板只管超速）不动。
+	local err2 = LG_SPEED - craft.IAS
+	if craft.AltitudeAgl < 30 then thr = math.max(0, thr - 0.4 * dt)  -- v4.29 拉平收光油门（real retard）：
+	elseif err2 > 2.5 or (sink_bad and err2 > -1) then   -- v4.65 带宽同 stage1 放慢（±2.5/0.25）
+		thr = math.min(1, thr + math.min(0.25, err2 * 0.05 + 0.08) * dt)
+	elseif err2 < -2.5 then
+		thr = math.max(0, thr + math.max(-0.25, err2 * 0.05) * dt)
+	end
+	land_ax("Throttle", thr)
+	lg_ovr.thr = true
+	local brk_t = math.max(0, math.min(1, (craft.IAS - LG_SPEED - 1) / 8))
+	if craft.IAS < LG_SPEED - 4 then brk_t = 0 end
+	lg_brk = lg_brk + (brk_t - lg_brk) * math.min(1, dt * (brk_t > lg_brk and 1 or 4))
+	pcall(function() c:OverrideInput("Brake", lg_brk) end)
+	local phi = math.abs(craft.RollAngle)
+	if phi > 60 then phi = 60 end
+	local bank_comp = 3.0 * (1 / math.cos(phi * math.pi / 180) - 1)
+	-- ⚠ 平台实锤（两局着陆几何核算）：craft.AngleOfAttack = γ−θ = −真α，符号与空气动力学约定相反，
+	-- 必须取负再用（platform-facts §25）。
+	local aoa_true = -craft.AngleOfAttack
+	-- v4.13 拉平窗 30→10 提前到 45→15：α@TD 与速度同曲线（53 m/s→α5.1、42 m/s→α6.8 实测），
+	-- 拉平=减速换 α 的动过程，30 m 才开窗=没得换（v4.12 满舵 pr 仅 0.15°/s 定罪）。
+	local wa = math.max(0, math.min(1, (45 - craft.AltitudeAgl) / 30))
+	local path_cmd  = 2.2 * (sink_cmd - lg_vg) + bank_comp
+	-- 拉平积分消 α 静差：进窗（wa>0.3）才涨、出窗清零。v4.17 钳位 6→10、速率 0.5→1.2——
+	-- v4.16 实锤积分顶格（pit −0.53 未饱和、α 平台 5.2）；窗全长 ~4 s，0.5/s 根本灌不满。
+	if wa > 0.3 then
+		lg_fint = math.max(-10, math.min(10, lg_fint + (LG_ALPHA - aoa_true) * dt * 1.2))
+	else
+		lg_fint = 0
+	end
+	local flare_cmd = 1.0 * (LG_ALPHA - aoa_true) + lg_fint * wa + bank_comp
+	local cmd_deg = math.max(-15, math.min(15, path_cmd + wa * (flare_cmd - path_cmd)))
+	qf = qf + (craft.PitchRate - qf) * math.min(1, dt * 2 * math.pi * 4)   -- v4.53 2→4 Hz（与 stage1 同步，振铃主现场在下滑段）
+	land_pitch_ax(-KAP_P * (cmd_deg - craft.PitchAngle) - KAP_Q * qf, dt)
+	lg_ovr.pitch = true
+	if math.fmod(_frame, 10) == 0 then
+		print(string.format("LAND,%.3f,2,%.0f,%+.1f,%.0f,%.0f,%.2f,%.0f,%+.0f,%.1f",
+			craft.Time, dist, eps_h, tgt, craft.Altitude,
+			craft.Controls.Throttle, craft.IAS, l, -craft.AngleOfAttack))
+	end
+end
