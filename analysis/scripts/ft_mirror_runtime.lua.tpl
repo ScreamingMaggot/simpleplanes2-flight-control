@@ -65,53 +65,72 @@ local function _rad(x) return x * math.pi / 180 end
 local function _deg(x) return x * 180 / math.pi end
 local function _wrap180(a) return (a + 180) % 360 - 180 end
 
+--[[ ★安全取值（2026-09-27 血的教训，见下方长注）：
+     CraftProxy/CraftControlsProxy 是 MoonSharp 的 **userdata**，Lua 里访问不存在的字段
+     会**抛错**（不是返回 nil）：`cannot access field VTOL of userdata<...CraftControlsProxy>`。
+     抛在 update() 里 ⇒ **整个 update() 中断** ⇒ 连 TEL 都不再落盘。
+
+     实测记录：`ctl.VTOL` 就是这样的字段 ⇒ 镜像每帧抛错、把用户仅有的一条遥测流也一起弄瞎
+     （platform-facts §30 早写过"Lua 代理可读面有限"，我没逐个实测就裸读，付了一局架次）。
+
+     ⇒ 铁律：**凡从代理取值一律走 _g()**（pcall 包裹 + 失败落默认）。
+     这道兜底不是"以防万一"，而是必需品：代理字段可读性是**逐字段**的，且不同游戏版本会变。
+]]
+local function _g(obj, key, dflt)
+  local ok, v = pcall(function() return obj[key] end)
+  if not ok or v == nil then return dflt end
+  if type(v) == "number" then return v end
+  if type(v) == "boolean" then return v and 1 or 0 end
+  return dflt
+end
+
 --[[ 由生成器注入：S.xxx 取值源与 V.xxx 求值式（见 ft_mirror_gen.py 输出）]]
 __MIRROR_BODY__
 
 --[[ 每帧调用一次：填内置量 → 按面板顺序求值 → 返回 V 表（供日志取用） ]]
 function M.step()
-  local now = craft.Time
+  local now = _g(craft, "Time", 0)
   local dt = _prev.t and (now - _prev.t) or 0
   _prev.t = now
   if dt <= 0 or dt > 0.5 then dt = 0.05 end     -- 暂停/实验跳变钳位（同 telemetry-addon 纪律）
   S.dt = dt
   S.Time = now
   local c = craft
-  local ctl = craft.Controls
-  S.Altitude = c.Altitude
-  S.AltitudeAgl = c.AltitudeAgl
-  S.AngleOfAttack = c.AngleOfAttack
-  S.AngleOfSlip = c.AngleOfSlip
-  S.Fuel = c.Fuel
-  S.GForce = c.GForce
-  S.GS = c.GS
-  S.Heading = c.Heading
-  S.IAS = c.IAS
-  S.Latitude = c.Latitude
-  S.Longitude = c.Longitude
-  S.PitchAngle = c.PitchAngle
-  S.PitchRate = c.PitchRate
-  S.RollAngle = c.RollAngle
-  S.RollRate = c.RollRate
-  S.TAS = c.TAS
-  S.VerticalG = c.VerticalG
-  S.YawRate = c.YawRate
-  -- 控制轴（**飞行员轴**，与 FT 零件上下文同名）
-  S.Pitch = ctl.Pitch
-  S.Roll = ctl.Roll
-  S.Yaw = ctl.Yaw
-  S.Throttle = ctl.Throttle
-  S.Trim = ctl.Trim
-  S.Brake = ctl.Brake
-  S.VTOL = ctl.VTOL or 0
-  S.Flaps = ctl.Flaps or 0
-  S.LandingGear = ctl.LandingGear or 0
-  S.GearDown = ctl.LandingGearDown and 1 or 0
+  local ctl = _g(craft, "Controls", nil)
+  -- 机体量：全部经 _g（同一类 userdata，未实测过的名字一律不裸读）
+  S.Altitude      = _g(c, "Altitude", 0)
+  S.AltitudeAgl   = _g(c, "AltitudeAgl", 0)
+  S.AngleOfAttack = _g(c, "AngleOfAttack", 0)
+  S.AngleOfSlip   = _g(c, "AngleOfSlip", 0)
+  S.Fuel          = _g(c, "Fuel", 0)
+  S.GForce        = _g(c, "GForce", 0)
+  S.GS            = _g(c, "GS", 0)
+  S.Heading       = _g(c, "Heading", 0)
+  S.IAS           = _g(c, "IAS", 0)
+  S.Latitude      = _g(c, "Latitude", 0)
+  S.Longitude     = _g(c, "Longitude", 0)
+  S.PitchAngle    = _g(c, "PitchAngle", 0)
+  S.PitchRate     = _g(c, "PitchRate", 0)
+  S.RollAngle     = _g(c, "RollAngle", 0)
+  S.RollRate      = _g(c, "RollRate", 0)
+  S.TAS           = _g(c, "TAS", 0)
+  S.VerticalG     = _g(c, "VerticalG", 0)
+  S.YawRate       = _g(c, "YawRate", 0)
+  -- 控制轴（**飞行员轴**）。可读性**逐字段不同**、且未全测 ⇒ 一律 _g 兜底。
+  --   已实测可读：LandingGearDown（§30）、Throttle/Trim/Pitch/Roll/Yaw（TEL 行在用）。
+  --   实测**不可读**：VTOL（本轮，报错原文见文件头）。
+  S.Pitch        = _g(ctl, "Pitch", 0)
+  S.Roll         = _g(ctl, "Roll", 0)
+  S.Yaw          = _g(ctl, "Yaw", 0)
+  S.Throttle     = _g(ctl, "Throttle", 0)
+  S.Trim         = _g(ctl, "Trim", 0)
+  S.Brake        = _g(ctl, "Brake", 0)
+  S.VTOL         = _g(ctl, "VTOL", 0)          -- ★不可读 ⇒ 恒 0（真值未知，勿当真相）
+  S.Flaps        = _g(ctl, "Flaps", 0)
+  S.LandingGear  = _g(ctl, "LandingGear", 0)
+  S.GearDown     = _g(ctl, "LandingGearDown", 0)
   -- Activate1..8：**面板上下文读不到**（platform-facts §28/29），镜像按同规则置 0
   --   ⇒ 镜像里凡用 ActivateN 的量（SLK 的进7门）与真面板**必然不同**，读 APPR 行时要记住。
-  --   本镜像的处置：从零件层可读物无通道 ⇒ 用 Flaps 代主电（与 SC-5 定案一致），另打 ACT 列。
-  local fl = 0
-  pcall(function() fl = ctl.Flaps or 0 end)
   for i = 1, 8 do S["Activate" .. i] = 0 end
   __MIRROR_EVAL__
   return V

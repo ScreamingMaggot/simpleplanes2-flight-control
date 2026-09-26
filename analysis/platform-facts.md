@@ -355,9 +355,45 @@ CraftProxy 无变量袋（Lua 读不到）；Label 是唯一窗口且**只能人
    （如 `SLK` 的进 7 门）**与真面板必然不同，该列不能当真相用**——已在生成器 `MIRROR_BAN` 标注；
 3. 镜像**只读不写轴**，绝不参与控制。
 
-**工程闸（三道，生成期机械校验，不靠人眼）**：luaparser 语法闸；
+**工程闸（五道，生成期机械校验，不靠人眼）**：luaparser 语法闸；
 **词法作用域闸**（`local` 只对其后可见——镜像定义在 `update()` 之后会让每帧调用全是 nil，
-而**语法闸查不出**）；**行完整性闸**（表头列数＝格式符数−2＝取数列数，防 CSV 列错位）。
+而**语法闸查不出**）；**行完整性闸**（表头列数＝格式符数−2＝取数列数，防 CSV 列错位）；
+**代理裸读闸**（见 §38）；**契约闸**（生成物↔parser 端到端逐列）。
 
 **Lua 与 FT 的命名空间差异（写镜像要记住）**：`craft.Controls` 里没有 `ActivateN`
 （§30 实测 pcall 失败）⇒ 镜像无法从 Lua 侧拿到开关，只能置 0 并另打 `ACT` 列。
+
+## 三十八、★代理字段是 userdata：裸读**抛错**，能打死整条 update()（2026-09-27，一局架次的代价）
+
+**事故**：镜像快照里写了 `S.VTOL = ctl.VTOL or 0`（`ctl = craft.Controls`）。
+实飞日志原文：
+```
+Lua script error: chunk_1:(1288,1-44): cannot access field VTOL of userdata<Assets.Scripts.Lua.Proxies.CraftControlsProxy>
+[Suppressed 879 Errors]: （同一句，被压制约 4000 次）
+```
+
+**机制（比"某字段读不到"严重得多）**：
+- CraftProxy / CraftControlsProxy 是 MoonSharp **userdata**，访问**不存在的字段会抛异常**，
+  **不是**返回 `nil`。所以 `x or 0` 这种 Lua 惯用兜底**完全无效**——`or` 根本执行不到。
+- 异常从 `_ftmirror.step()` 抛出、穿透 `update()` ⇒ **update() 当场中断**，
+  它后面所有语句全不执行。本例中 `_appr_log()` 在 TEL 打印**之后**，
+  而 TEL 打印在 `update()` 的**后半段** ⇒ **APPR 与 TEL 双双零数据行**：
+  `TELHDR`/`APPRHDR` 表头都打了（在 initialize），却再无一行业绩。
+  （`POS/SEEK/TGT/ALARM` 仍有，因为它们在 update() 的**更早**位置。）
+
+**铁律（两条，必须同时做）**：
+1. **凡从代理取值一律走安全取值器**：`_g(obj, "Key", dflt)`（内部 `pcall` + 类型归一 + 失败落默认）。
+   **逐字段**判定，不要整组假设——已知 `LandingGearDown` 可读（§30）、
+   `Throttle/Trim/Pitch/Roll/Yaw` 可读（TEL 行在用），而 **`VTOL` 不可读**（本节实测）。
+   `Flaps` 在 addon 里历来包着 `pcall`（telemetry-addon.lua 原句）⇒ **不保证**可读。
+2. **观测代码一律 pcall 围栏**：`_appr_log()` 整体包 `pcall`，并带连续失败计数
+   （前 3 次报原文 → 到上限打 `APPR MIRROR DISABLED … (TEL unaffected)` → 之后不再尝试）。
+   **"观测把主遥测打死"比"没有观测"恶劣得多**——这是本节的中心思想。
+
+**纪律账**：§30 早就写着"Lua 代理可读面有限"，我却把未逐个实测过的轴直接裸读，
+**法典里已有的纪律又犯一遍**。⇒ 规程：**任何未实测的代理字段名，先探针/先包 pcall，才准进主链路**。
+
+**机械防复发**：`build_mirror_addon.py:check_proxy_reads()` —— **代理裸读闸**，
+只扫镜像块（不扫 addon 既有代码，否则满屏假阳性），并正确处理 Lua 长注释 `--[[ ]]`；
+已用"故意去掉 `_g` → 闸必须红；恢复 → 放行"反向验证过。同类"生成期闸"的价值在此再次确认：
+**语法闸（luaparser）对这种错完全无能为力**——错的是运行时语义，不是语法。

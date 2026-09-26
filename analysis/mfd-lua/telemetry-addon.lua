@@ -15,6 +15,12 @@
 
 
 
+
+
+
+
+
+
 -- ==== 面板镜像（自动生成：ft_mirror_gen.py）====
 local _ftmirror = (function()
 --[[ ==========================================================================
@@ -84,53 +90,72 @@ local function _rad(x) return x * math.pi / 180 end
 local function _deg(x) return x * 180 / math.pi end
 local function _wrap180(a) return (a + 180) % 360 - 180 end
 
+--[[ ★安全取值（2026-09-27 血的教训，见下方长注）：
+     CraftProxy/CraftControlsProxy 是 MoonSharp 的 **userdata**，Lua 里访问不存在的字段
+     会**抛错**（不是返回 nil）：`cannot access field VTOL of userdata<...CraftControlsProxy>`。
+     抛在 update() 里 ⇒ **整个 update() 中断** ⇒ 连 TEL 都不再落盘。
+
+     实测记录：`ctl.VTOL` 就是这样的字段 ⇒ 镜像每帧抛错、把用户仅有的一条遥测流也一起弄瞎
+     （platform-facts §30 早写过"Lua 代理可读面有限"，我没逐个实测就裸读，付了一局架次）。
+
+     ⇒ 铁律：**凡从代理取值一律走 _g()**（pcall 包裹 + 失败落默认）。
+     这道兜底不是"以防万一"，而是必需品：代理字段可读性是**逐字段**的，且不同游戏版本会变。
+]]
+local function _g(obj, key, dflt)
+  local ok, v = pcall(function() return obj[key] end)
+  if not ok or v == nil then return dflt end
+  if type(v) == "number" then return v end
+  if type(v) == "boolean" then return v and 1 or 0 end
+  return dflt
+end
+
 --[[ 由生成器注入：S.xxx 取值源与 V.xxx 求值式（见 ft_mirror_gen.py 输出）]]
 -- （内置量快照已在 M.step 顶部填写，无需额外 body）
 
 --[[ 每帧调用一次：填内置量 → 按面板顺序求值 → 返回 V 表（供日志取用） ]]
 function M.step()
-  local now = craft.Time
+  local now = _g(craft, "Time", 0)
   local dt = _prev.t and (now - _prev.t) or 0
   _prev.t = now
   if dt <= 0 or dt > 0.5 then dt = 0.05 end     -- 暂停/实验跳变钳位（同 telemetry-addon 纪律）
   S.dt = dt
   S.Time = now
   local c = craft
-  local ctl = craft.Controls
-  S.Altitude = c.Altitude
-  S.AltitudeAgl = c.AltitudeAgl
-  S.AngleOfAttack = c.AngleOfAttack
-  S.AngleOfSlip = c.AngleOfSlip
-  S.Fuel = c.Fuel
-  S.GForce = c.GForce
-  S.GS = c.GS
-  S.Heading = c.Heading
-  S.IAS = c.IAS
-  S.Latitude = c.Latitude
-  S.Longitude = c.Longitude
-  S.PitchAngle = c.PitchAngle
-  S.PitchRate = c.PitchRate
-  S.RollAngle = c.RollAngle
-  S.RollRate = c.RollRate
-  S.TAS = c.TAS
-  S.VerticalG = c.VerticalG
-  S.YawRate = c.YawRate
-  -- 控制轴（**飞行员轴**，与 FT 零件上下文同名）
-  S.Pitch = ctl.Pitch
-  S.Roll = ctl.Roll
-  S.Yaw = ctl.Yaw
-  S.Throttle = ctl.Throttle
-  S.Trim = ctl.Trim
-  S.Brake = ctl.Brake
-  S.VTOL = ctl.VTOL or 0
-  S.Flaps = ctl.Flaps or 0
-  S.LandingGear = ctl.LandingGear or 0
-  S.GearDown = ctl.LandingGearDown and 1 or 0
+  local ctl = _g(craft, "Controls", nil)
+  -- 机体量：全部经 _g（同一类 userdata，未实测过的名字一律不裸读）
+  S.Altitude      = _g(c, "Altitude", 0)
+  S.AltitudeAgl   = _g(c, "AltitudeAgl", 0)
+  S.AngleOfAttack = _g(c, "AngleOfAttack", 0)
+  S.AngleOfSlip   = _g(c, "AngleOfSlip", 0)
+  S.Fuel          = _g(c, "Fuel", 0)
+  S.GForce        = _g(c, "GForce", 0)
+  S.GS            = _g(c, "GS", 0)
+  S.Heading       = _g(c, "Heading", 0)
+  S.IAS           = _g(c, "IAS", 0)
+  S.Latitude      = _g(c, "Latitude", 0)
+  S.Longitude     = _g(c, "Longitude", 0)
+  S.PitchAngle    = _g(c, "PitchAngle", 0)
+  S.PitchRate     = _g(c, "PitchRate", 0)
+  S.RollAngle     = _g(c, "RollAngle", 0)
+  S.RollRate      = _g(c, "RollRate", 0)
+  S.TAS           = _g(c, "TAS", 0)
+  S.VerticalG     = _g(c, "VerticalG", 0)
+  S.YawRate       = _g(c, "YawRate", 0)
+  -- 控制轴（**飞行员轴**）。可读性**逐字段不同**、且未全测 ⇒ 一律 _g 兜底。
+  --   已实测可读：LandingGearDown（§30）、Throttle/Trim/Pitch/Roll/Yaw（TEL 行在用）。
+  --   实测**不可读**：VTOL（本轮，报错原文见文件头）。
+  S.Pitch        = _g(ctl, "Pitch", 0)
+  S.Roll         = _g(ctl, "Roll", 0)
+  S.Yaw          = _g(ctl, "Yaw", 0)
+  S.Throttle     = _g(ctl, "Throttle", 0)
+  S.Trim         = _g(ctl, "Trim", 0)
+  S.Brake        = _g(ctl, "Brake", 0)
+  S.VTOL         = _g(ctl, "VTOL", 0)          -- ★不可读 ⇒ 恒 0（真值未知，勿当真相）
+  S.Flaps        = _g(ctl, "Flaps", 0)
+  S.LandingGear  = _g(ctl, "LandingGear", 0)
+  S.GearDown     = _g(ctl, "LandingGearDown", 0)
   -- Activate1..8：**面板上下文读不到**（platform-facts §28/29），镜像按同规则置 0
   --   ⇒ 镜像里凡用 ActivateN 的量（SLK 的进7门）与真面板**必然不同**，读 APPR 行时要记住。
-  --   本镜像的处置：从零件层可读物无通道 ⇒ 用 Flaps 代主电（与 SC-5 定案一致），另打 ACT 列。
-  local fl = 0
-  pcall(function() fl = ctl.Flaps or 0 end)
   for i = 1, 8 do S["Activate" .. i] = 0 end
   -- 有状态调用点（rate/sum/smooth）共 23 个，各有独立状态格
   V["boot"] = math.max(0, math.min(1, ((S.Time * 0.25))))
@@ -599,7 +624,15 @@ end)()
 -- setter 无日志通道 ⇒ 在 Lua 里按**同一条式子**复算并打印（同 FT8 复算的先例）。
 -- 与面板的同步**由构造保证**（同一份 PANEL 翻译而来）；漂移只可能来自 sum/smooth/rate
 -- 的初值（镜像从启用那帧起算，面板可能更早）⇒ 看数据时以稳态段为准。
+--
+-- ★★铁律（2026-09-27 用一整局架次换来）：**观测代码绝不允许有能力打死主遥测。**
+--   事故：镜像里一处裸读 `craft.Controls.VTOL`（该字段在代理上不存在，访问即抛错），
+--   异常从 _ftmirror.step() 抛进 update() ⇒ **整个 update() 中断** ⇒ APPR 与 TEL
+--   *双双*零数据行（TELHDR/APPRHDR 打了表头却再无一行业绩）。
+--   ⇒ 故此处用 pcall 围栏 + 连续失败计数：观测挂了只是没观测，TEL 必须照常活。
 local _apfr = 0
+local _apfr_err = 0          -- 连续失败帧数（用于限频报错，不刷屏）
+local _APFR_ERR_MAX = 5      -- 连续失败超过此数就停止尝试（避免每帧 pcall 白烧）
 local function _num(x)
 	if x == nil then return -99999 end
 	if type(x) ~= "number" then return x and 1 or 0 end
@@ -610,10 +643,13 @@ local function _appr_hdr() print("APPRHDR,cid,t,SD,LT,TLA,HDG,BRG,rwyOk,rwyPri,x
 local function _appr_log()
 	_apfr = _apfr + 1
 	if math.fmod(_apfr, 6) ~= 0 then return end   -- 6 分频（约 10~20 Hz，与 TEL 同量级）
-	local V = _ftmirror.step()
-	print(string.format("APPR,%d,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-		_cidn, craft.Time,
-		_num(V["SD"]),
+	if _apfr_err >= _APFR_ERR_MAX then return end -- 已判死：不再尝试，也不再抛
+	-- ★pcall 围栏：镜像内部任何错都不得逸出到 update()
+	local ok, err = pcall(function()
+		local V = _ftmirror.step()
+		print(string.format("APPR,%d,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+			_cidn, craft.Time,
+			_num(V["SD"]),
 			_num(V["LT"]),
 			_num(V["TLA"]),
 			_num(V["HDG"]),
@@ -651,6 +687,23 @@ local function _appr_log()
 			_num(V["boot"]),
 			_num(V["airb"]),
 			_num(V["hold"])))
+	end)
+	if ok then
+		if _apfr_err > 0 then
+			print(string.format("APPR RECOVERED after %d failed frames", _apfr_err))
+			_apfr_err = 0
+		end
+	else
+		_apfr_err = _apfr_err + 1
+		-- 只在前几次报原文（后续靠 RECOVERED/DISABLED 计数），免得每帧刷屏
+		if _apfr_err <= 3 then
+			print(string.format("APPR MIRROR ERROR (%d/%d): %s",
+				_apfr_err, _APFR_ERR_MAX, tostring(err)))
+		elseif _apfr_err == _APFR_ERR_MAX then
+			print(string.format("APPR MIRROR DISABLED after %d consecutive errors "
+				.. "(TEL unaffected): %s", _APFR_ERR_MAX, tostring(err)))
+		end
+	end
 end
 -- ==== /APPR ====
 
@@ -663,6 +716,8 @@ local _cidn = nil          -- 本机身份号（首帧位置派生；一局面�
 function initialize()
 	if _origInitialize then _origInitialize() end
 	print("TELHDR,cid,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw,flp")
+	_appr_hdr()
+	_appr_hdr()
 	_appr_hdr()
 	_appr_hdr()
 	_appr_hdr()
@@ -770,6 +825,10 @@ function update()
 			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
 		
 		_appr_log()
+
+_appr_log()
+
+_appr_log()
 
 _appr_log()
 

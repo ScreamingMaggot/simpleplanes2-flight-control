@@ -49,32 +49,144 @@ APPR_COLS = [
 
 
 def emit_appr_block(cols):
-    """生成 APPR 行的 Lua 代码块（含表头与取数）。"""
+    """生成 APPR 行的 Lua 代码块（含表头与取数）。
+
+    ⚠ 模板里含**大量 Lua 的 `%d`/`%s`**（string.format 用），因此**不能用 Python 的
+    `%` 格式化**（会 TypeError: not enough arguments）。统一用 `@@NAME@@` 占位替换。
+    """
     fmt = ",".join(["%d", "%.3f"] + ["%.2f"] * len(cols))
     args = ",\n\t\t\t".join('_num(V["%s"])' % c for c in cols)
     hdr = "APPRHDR,cid,t," + ",".join(cols)
-    return """
+    tpl = """
 -- ==== APPR：FT 进近面板内部量落盘（由 ft_mirror_gen.py 机械生成，勿手改）====
 -- setter 无日志通道 ⇒ 在 Lua 里按**同一条式子**复算并打印（同 FT8 复算的先例）。
 -- 与面板的同步**由构造保证**（同一份 PANEL 翻译而来）；漂移只可能来自 sum/smooth/rate
 -- 的初值（镜像从启用那帧起算，面板可能更早）⇒ 看数据时以稳态段为准。
+--
+-- ★★铁律（2026-09-27 用一整局架次换来）：**观测代码绝不允许有能力打死主遥测。**
+--   事故：镜像里一处裸读 `craft.Controls.VTOL`（该字段在代理上不存在，访问即抛错），
+--   异常从 _ftmirror.step() 抛进 update() ⇒ **整个 update() 中断** ⇒ APPR 与 TEL
+--   *双双*零数据行（TELHDR/APPRHDR 打了表头却再无一行业绩）。
+--   ⇒ 故此处用 pcall 围栏 + 连续失败计数：观测挂了只是没观测，TEL 必须照常活。
 local _apfr = 0
+local _apfr_err = 0          -- 连续失败帧数（用于限频报错，不刷屏）
+local _APFR_ERR_MAX = 5      -- 连续失败超过此数就停止尝试（避免每帧 pcall 白烧）
 local function _num(x)
 	if x == nil then return -99999 end
 	if type(x) ~= "number" then return x and 1 or 0 end
 	if x ~= x then return -99999 end            -- NaN 哨兵
 	return x
 end
-local function _appr_hdr() print("%s") end
+local function _appr_hdr() print("@@HDR@@") end
 local function _appr_log()
 	_apfr = _apfr + 1
 	if math.fmod(_apfr, 6) ~= 0 then return end   -- 6 分频（约 10~20 Hz，与 TEL 同量级）
-	local V = _ftmirror.step()
-	print(string.format("APPR,%s",
-		_cidn, craft.Time,
-		%s))
+	if _apfr_err >= _APFR_ERR_MAX then return end -- 已判死：不再尝试，也不再抛
+	-- ★pcall 围栏：镜像内部任何错都不得逸出到 update()
+	local ok, err = pcall(function()
+		local V = _ftmirror.step()
+		print(string.format("APPR,@@FMT@@",
+			_cidn, craft.Time,
+			@@ARGS@@))
+	end)
+	if ok then
+		if _apfr_err > 0 then
+			print(string.format("APPR RECOVERED after %d failed frames", _apfr_err))
+			_apfr_err = 0
+		end
+	else
+		_apfr_err = _apfr_err + 1
+		-- 只在前几次报原文（后续靠 RECOVERED/DISABLED 计数），免得每帧刷屏
+		if _apfr_err <= 3 then
+			print(string.format("APPR MIRROR ERROR (%d/%d): %s",
+				_apfr_err, _APFR_ERR_MAX, tostring(err)))
+		elseif _apfr_err == _APFR_ERR_MAX then
+			print(string.format("APPR MIRROR DISABLED after %d consecutive errors "
+				.. "(TEL unaffected): %s", _APFR_ERR_MAX, tostring(err)))
+		end
+	end
 end
-""" % (hdr, fmt, args)
+"""
+    return (tpl.replace("@@HDR@@", hdr)
+               .replace("@@FMT@@", fmt)
+               .replace("@@ARGS@@", args))
+
+
+def check_proxy_reads(src, mirror_start_marker="local _ftmirror", mirror_end_marker="-- ==== /面板镜像 ===="):
+    """**代理裸读闸**（2026-09-27，为一整局架次付账的那道闸）。
+
+    背景：CraftProxy / CraftControlsProxy 是 MoonSharp **userdata**，访问不存在的字段会
+    **抛错**（不是返回 nil）：
+        cannot access field VTOL of userdata<Assets.Scripts.Lua.Proxies.CraftControlsProxy>
+    抛在 update() 里 ⇒ 整个 update() 中断 ⇒ **APPR 与 TEL 双双零数据**。
+
+    ★作用域（第一版写错过，必须限定）：**只查镜像块**（`local _ftmirror` … `/面板镜像`）。
+      原因：addon 里那份既有遥测（FT8 复算等）已实跑数月无此错，且它自身就有大量
+      `craft.X` 裸读是**已证可用**的；把闸口开到全文件只会刷屏满屏假阳性、反而没人看。
+      本闸要防的是**新引入的、未实测过的**代理字段读取。
+    """
+    i = src.find(mirror_start_marker)
+    j = src.find(mirror_end_marker)
+    if i < 0 or j < 0 or j <= i:
+        raise SystemExit("代理裸读闸：定位不到镜像块（start=%s end=%s）" % (i, j))
+    block = src[i:j]
+    lines = block.split("\n")
+    probs = []
+    safe = re.compile(r'=\s*_g\s*\(')
+    # 镜像块里凡 `S.x = <expr>` 右值出现 craft./ctl./c. 的点号取值 ⇒ 必须经 _g
+    for n, line in enumerate(lines, 1):
+        s = line.strip()
+        if not s or s.startswith("--"):
+            continue
+        if not re.match(r'S\.\w+\s*=', s):
+            continue                    # 只看 S 表快照赋值（其余是求值式，读的是 S/V）
+        if safe.search(s):
+            continue
+        if re.search(r'=\s*(-?\d+(\.\d+)?|true|false|nil)\s*$', s):
+            continue                    # 常量赋值安全
+        if re.search(r'\b(craft|ctl|c)\s*\.', s):
+            probs.append("镜像块第 %d 行未包 _g 的代理读取：%s" % (n, s[:88]))
+    # 必须存在 _g 定义且被用到
+    if "local function _g(" not in block:
+        probs.append("镜像块里没有 _g() 安全取值器定义")
+    if "_g(c" not in block:
+        probs.append("镜像块里没有用到 _g()（代理取值未做保护）")
+    # 旧写法必须绝迹（本轮事故的直接形态）。**只看代码行**——注释里正当地记着这次事故
+    #   （`实测记录：ctl.VTOL 就是这样的字段…`），闸不该把文档当代码判死。
+    #   ⚠ 必须处理 **Lua 长注释 `--[[ ... ]]`**：块内每行都不以 `--` 开头，
+    #     只判行首会漏（本闸第一版就漏了，把注释当代码）。
+    code_lines, in_block = [], False
+    for n, l in enumerate(block.split("\n"), 1):
+        s = l.strip()
+        if in_block:
+            if "]]" in s:
+                in_block = False
+            continue
+        if s.startswith("--[["):
+            if "]]" not in s:
+                in_block = True
+            continue
+        if s.startswith("--"):
+            continue
+        code_lines.append((n, l))
+    for bad in ("ctl.VTOL", "ctl.Flaps", "ctl.Brake", "ctl.LandingGear", "ctl.Throttle"):
+        pat = re.compile(r"(?<![\w.])" + re.escape(bad) + r"\b")
+        for n, l in code_lines:
+            if pat.search(l):
+                probs.append("镜像块第 %d 行仍有裸读 %s（必须改 _g）：%s"
+                             % (n, bad, l.strip()[:70]))
+
+    # 调用点必须有 pcall 围栏（观测不得打死 TEL）
+    k = src.find("local function _appr_log")
+    if k < 0:
+        probs.append("找不到 _appr_log")
+    elif "pcall(function()" not in src[k:k + 3000]:
+        probs.append("_appr_log 未用 pcall 围栏（观测出错会打死 TEL）")
+
+    if probs:
+        raise SystemExit("代理裸读闸不过：\n  " + "\n  ".join(probs))
+    print("代理裸读闸过：镜像块内 %d 个 S.* 快照全部经 _g()，_appr_log 有 pcall 围栏"
+          % len([1 for l in lines if re.match(r'\s*S\.\w+\s*=', l)]))
 
 
 def check_definition_order(src):
@@ -218,6 +330,7 @@ def main():
     gen.check_lua_syntax(src, "telemetry-addon+mirror")
     check_definition_order(src)
     check_appr_row(src)
+    check_proxy_reads(src)
 
     if args.inplace:
         bak = addon_path + ".premirror"
