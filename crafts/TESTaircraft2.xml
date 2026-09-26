@@ -555,17 +555,16 @@
     <Setter variable="Ael" function="AT12 - 0.0524 * max(AS12, 0)" priority="0" />
     <Setter variable="Aexc" function="max(0, (Altitude - Ael) - AS12 * tanG)" priority="0" />
     <Setter variable="rwyEng" function="((rwyOk &gt; 0.5) | (AU12 &gt; 0.5)) ? 1 : 0" priority="0" />
-    <Setter variable="PAn" function="clamp01((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3) &amp; (AU12 &gt; 0.5))" priority="0" />
-    <Setter variable="PNn" function="clamp01(AS12 &lt;= 4850)" priority="0" />
-    <Setter variable="PTn" function="clamp01(Aexc &gt; 100)" priority="0" />
-    <Setter variable="PFn" function="clamp01((Altitude &lt;= AT12 + 100) &amp; (abs(AL12) &lt; 150) &amp; (abs(deltaangle(Heading, AH12)) &lt; 25))" priority="0" />
-    <Setter variable="PH" function="PAn * (clamp01(PH &gt; 0.5) + clamp01(PNn) * (1 - clamp01(PH &gt; 0.5))) * (1 + clamp01(PFn + clamp01(PH &gt; 1.5) + (1 - clamp01(PH &gt; 0.5)) * clamp01(PNn) * (1 - PTn)))" priority="0" />
-    <Setter variable="h0" function="clamp01(PH &lt; 0.5)" priority="0" />
-    <Setter variable="h1" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))" priority="0" />
-    <Setter variable="h2" function="clamp01(PH &gt; 1.5)" priority="0" />
-    <Setter variable="hCmd" function="h0 * AB12 + h1 * (AH12 - atan2(0 - (AS12 - 4850), 0 - (AL12 + 200))) + h2 * AH12" priority="0" />
-    <Setter variable="bankApp" function="(PH &gt; 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk" priority="0" />
-    <Setter variable="altTgt" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5)) * (Altitude - 400) + (1 - clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))) * min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? TLA : 9999999)" priority="0" />
+    <Setter variable="Ar" function="clamp01((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3) &amp; (AU12 &gt; 0.5))" priority="0" />
+    <Setter variable="orbS" function="clamp01(Aexc &gt; 50)" priority="0" />
+    <Setter variable="orbR" function="clamp01((Aexc &lt;= 50) &amp; (abs(AL12) &lt; 200) &amp; (abs(deltaangle(Heading, AH12)) &lt; 30))" priority="0" />
+    <Setter variable="ORB" function="clamp01(Ar * (orbS + ORB * (1 - orbR)))" priority="0" />
+    <Setter variable="hFar" function="clamp01(AS12 &gt; 4850)" priority="0" />
+    <Setter variable="hBase" function="hFar * AB12 + (1 - hFar) * AH12" priority="0" />
+    <Setter variable="hTan" function="AH12 - atan2(0 - (AS12 - 4850), 0 - (AL12 + 200))" priority="0" />
+    <Setter variable="hCmd" function="ORB * hTan + (1 - ORB) * hBase" priority="0" />
+    <Setter variable="bankApp" function="Ar ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk" priority="0" />
+    <Setter variable="altTgt" function="ORB * (Altitude - 400) + (1 - ORB) * min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? TLA : 9999999)" priority="0" />
     <Setter variable="vsLine" function="0.25 * (altTgt - Altitude) + (((SD &gt; 0) &amp; (SD &lt; 15000)) ? 0.0524 * clamp(rate(SD), -160, 160) : 0)" priority="0" />
     <Setter variable="vsCmd" function="clamp((AltitudeAgl &lt; 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))" priority="0" />
     <Setter variable="vsErr" function="vsCmd - vs" priority="0" />

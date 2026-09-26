@@ -1413,3 +1413,10 @@ cid=54835：ENROUTE 正常；进盘旋后 LT 单调外扩、航迹≈航向（�
 
 现象=cid 转一小段后拉平飞走。因绕圈后半圈 `AS>4850` ⇒ `PNn=0` ⇒ `PH` 从 1(ORBIT) 掉回 0(ENROUTE)（拉平、朝入口飞走）。
 修：PH 加迟滞——`reached = (PH>0.5) | PNn`，一旦到过 FAF 区就一直 ≥1；`isfinal = PFn | (PH>1.5) | (首次到达 & 不太高)`；`PH = PAn * reached * (1 + isfinal)`。--apply。
+
+## v2.31.5（2026-09-26）用户定：**弃相位机，改纯锁存 ORB**（"E≠0 或 未对正回流"就继续转）
+
+用户原话："写个逻辑让（E 不到 0 且 指向未重新接近跑道走廊）就继续转"。改：
+`Ar`=7&离地&有目标；`orbS`=(Aexc>50)；`orbR`=(Aexc≤50 & |AL|<200 & |Δ(Heading,AH)|<30)（够低且已对正回流）；
+`ORB = Ar*(orbS + ORB*(1-orbR))` ⇒ armed 时"要消高 **或** 尚未对正"就转，只有"E≈0 且已对正"才停；
+横向 `hCmd = ORB*hTan + (1-ORB)*hBase`（hTan 切线圆、hBase=远则朝入口 AB / 近则跑道航向 AH）；`bankApp=Ar? 追 hCmd(±55) : bankTrk`；`altTgt=ORB? Alt−400 : 正常`。弃 PH/h0/h1/h2。--apply 指纹 见下。

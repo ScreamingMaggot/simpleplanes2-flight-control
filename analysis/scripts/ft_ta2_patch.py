@@ -216,25 +216,19 @@ PANEL += [
     ("Aexc", "max(0, (Altitude - Ael) - " + AS + " * tanG)"),                 # 目标"太高"余量
     # rwyEng = 走廊(rwyOk) 或 四态识别到目标(AU) ⇒ 7 层接管的门（不再只认走廊；否则高/远/斜切时横向被门掉=飞走）
     ("rwyEng", "((rwyOk > 0.5) | (" + AU + " > 0.5)) ? 1 : 0"),
-    ("PAn",  "clamp01((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3) & (" + AU + " > 0.5))"),
-    ("PNn",  "clamp01(" + AS + " <= 4850)"),                                  # 已到 FAF 区
-    ("PTn",  "clamp01(Aexc > 100)"),                                          # 太高
-    ("PFn",  "clamp01((Altitude <= " + AT + " + 100) & (abs(" + AL + ") < 150) & (abs(deltaangle(Heading, " + AH + ")) < 25))"),
-    # PH（带迟滞，防绕圈时 AS 越过 4850 掉回 ENROUTE）：0=ENROUTE 1=ORBIT 2=FINAL，armed&未到→0；
-    #   一旦到过 FAF 区就一直 ≥1（`PH>0.5` 或 `PNn`）；到 FAF 那拍：太高→1，否则→2；PFn 或已 FINAL → 保持 2。
-    ("PH",   "PAn * (clamp01(PH > 0.5) + clamp01(PNn) * (1 - clamp01(PH > 0.5)))"
-             " * (1 + clamp01(PFn + clamp01(PH > 1.5) + (1 - clamp01(PH > 0.5)) * clamp01(PNn) * (1 - PTn)))"),
-    ("h0",   "clamp01(PH < 0.5)"),
-    ("h1",   "clamp01((PH > 0.5) & (PH < 1.5))"),
-    ("h2",   "clamp01(PH > 1.5)"),
-    # 横向目标航向（算术选路，无嵌套三元）：ENROUTE=朝入口 AB；ORBIT=绕 FAF(4850,0)、圆心在右(LT=-200)的切线；FINAL=跑道航向 AH
-    #  ★切线项符号经实测映射(cid=54835 反推 dSD=-vcosθ,dLT=-vsinθ)数值定为 **AH − atan2(...)**（+ 版会外扩发散）
-    ("hCmd", "h0 * " + AB + " + h1 * (" + AH + " - atan2(0 - (" + AS + " - 4850), 0 - (" + AL + " + 200))) + h2 * " + AH),
-    # 盘旋需要更大坡度权限才能绕住 R=200m（数值：30°坡→半径发散 332→741；≥45°→有界）；普通横向仍回退 bankTrk(±30)
-    ("bankApp", "(PH > 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk"),
+    ("Ar",   "clamp01((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3) & (" + AU + " > 0.5))"),   # armed&离地&有目标
+    ("orbS", "clamp01(Aexc > 50)"),                                                            # 要消高
+    ("orbR", "clamp01((Aexc <= 50) & (abs(" + AL + ") < 200) & (abs(deltaangle(Heading, " + AH + ")) < 30))"),  # 够低且已对正回流
+    # ORB 纯锁存（用户定）：armed 时，**要消高 或 尚未对正回流** ⇒ 一直转；只有"E≈0 且 已对正"才停（不再搞相位机）
+    ("ORB",  "clamp01(Ar * (orbS + ORB * (1 - orbR)))"),
+    ("hFar", "clamp01(" + AS + " > 4850)"),                                                    # 还远 ⇒ 朝入口
+    ("hBase","hFar * " + AB + " + (1 - hFar) * " + AH),
+    ("hTan", AH + " - atan2(0 - (" + AS + " - 4850), 0 - (" + AL + " + 200))"),                # 绕 FAF 切线圆（符号经实测数值定）
+    ("hCmd", "ORB * hTan + (1 - ORB) * hBase"),
+    ("bankApp", "Ar ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk"),                 # 盘旋需大坡权限；否则回退
 ]
 PANEL += [
-    ("altTgt", "clamp01((PH > 0.5) & (PH < 1.5)) * (Altitude - 400) + (1 - clamp01((PH > 0.5) & (PH < 1.5))) * min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? TLA : 9999999)"),
+    ("altTgt", "ORB * (Altitude - 400) + (1 - ORB) * min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? TLA : 9999999)"),
     # 道线自身以 0.0524·GS 下沉（85 m/s 时 4.5 m/s）⇒ 纯 P 追斜坡的稳态误差=斜率/增益=18 m
     # （app30 实测 +16~+18 m 恒定滞后，与 SC-5 当年同案）⇒ 补上前馈项。
     # v1.6：前馈**只对斜坡段有效**（`SD > 0`）——过阈值后道线是平的（`max(SD,0)`），
@@ -659,7 +653,7 @@ NumberToBool PID pow rate repeat round sign sin smooth sqrt sum tan""".split())
 # 显式放行的自参照 setter（2026-09-26 v2.17）：唯一合法用途 = 给 sum() 积分器加"退绕/清零"支，
 # 即 `sum(gate ? err : -self*k)` —— FT 没有内置抗饱和，自参照是"把积分按时间常数拉回 0"的唯一写法。
 # 除这个白名单外，自参照一律仍当错误（防手滑写出无定义的环）。
-ALLOW_SELFREF = {"cmdTheF_I", "SLK", "PH"}
+ALLOW_SELFREF = {"cmdTheF_I", "SLK", "ORB"}
 def check_refs(setters):
     defined = []
     for name, expr in setters:
