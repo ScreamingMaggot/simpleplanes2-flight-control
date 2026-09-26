@@ -424,7 +424,7 @@
     <Setter variable="fldE" function="TLA - 0.0524 * max(SD, 0)" priority="0" />
     <Setter variable="htExcess" function="(SD &lt; 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0" priority="0" />
     <Setter variable="vsLine" function="0.25 * (altTgt - Altitude) + (((SD &gt; 0) &amp; (SD &lt; 15000)) ? 0.0524 * clamp(rate(SD), -160, 160) : 0)" priority="0" />
-    <Setter variable="abvLine" function="clamp01((altTgt &lt; Altitude) &amp; (AltitudeAgl &gt; 60))" priority="0" />
+    <Setter variable="abvLine" function="clamp01((altTgt &lt; Altitude) &amp; (AltitudeAgl &gt; 100))" priority="0" />
     <Setter variable="sinkLo" function="abvLine * clamp(GS * 0.5, 3, 30) + (1 - abvLine) * clamp(GS * 0.12, 3, 7)" priority="0" />
     <Setter variable="vsCmd" function="clamp((AltitudeAgl &lt; 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -sinkLo, clamp(GS * 0.12, 3, 7))" priority="0" />
     <Setter variable="vsErr" function="vsCmd - vs" priority="0" />
