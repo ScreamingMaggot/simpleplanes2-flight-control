@@ -14,24 +14,6 @@ function initialize()
 	print("TELHDR,cid,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw,flp")
 end
 
--- ==== FT-ONLY 编译开关（2026-09-25，用户裁定）================================
--- 本机队的 Lua 律已由**纯 FT** 取代（高度自持 → 后续自动降落），这套 Lua 从此只做
--- **遥测与观测**：保留 TEL/POS/SEEK/TGT/ALARM/probe，**不再写任何操纵轴**
--- （Pitch/Roll/Throttle/Brake/Gear/Trim），从根上消除"Lua 与 FT 抢同一根轴"。
--- 想恢复 Lua 律：把 FT_ONLY 改 false 重新 build_patch --apply（需冷启动游戏）。
-local FT_ONLY = true
-
--- ==== FT8 定高环**复算**（2026-09-26，观测专用，绝不写轴）=====================
--- 动机：FT 面板 setter（cmdTheF / cmdTheF_I / altTgtH…）由游戏表达式引擎求值，
--- **从不写进 Player.log**；CraftProxy 也没有变量袋，Lua 读不到。=> 在 Lua 里按同一条式子复算，
--- 把 8 层定高环的内部量打进日志，省掉"让用户盯 HUD 报数"。（复算与真值可能有细微差，仅作观测。）
--- 与面板同式：altTgtH=VTOL>0?500+1500*VTOL:500+500*VTOL ; vsLim=IAS>42?20:5
---   vsCmdH=clamp(0.25*(altTgtH-Alt),-vsLim,vsLim) ; vsErrH=vsCmdH-vs(rate Alt)
---   cmdTheF_P=min(-30*Pitch+hold*airb*(0.8*vsErrH),(IAS<45?8:90))
---   cmdTheF_I=clamp(sum((|Roll|<0.05 & |Pitch|<0.05 & |cmdTheF_P|<25)?vsErrH*0.35:0),-20,20)
---   cmdTheF = min(cmdTheF_P+hold*airb*cmdTheF_I,(IAS<45?8:90))
-local ft8_I, ft8_hold, ft8_altprev, ft8_vsprev = 0, 0, nil, 0
-
 function update()
 	if _origUpdate then _origUpdate() end
 	local dt = craft.Time - _lastT
@@ -47,12 +29,10 @@ function update()
 		print(string.format("RWY AUTOCAP lat=%.0f lon=%.0f hdg=%.0f groundalt=%.0f",
 			rwy.lat, rwy.lon, rwy.hdg, rwy.alt))
 	end
-	if not FT_ONLY then          -- Lua 律（写操纵轴）一律停用，只留观测
-		tg_rates(dt)
-		autopilot(dt)
-		land_nav(dt)
-		seeker(dt)
-	end
+	tg_rates(dt)
+	autopilot(dt)
+	land_nav(dt)
+	seeker(dt)
 	ftlite_probe()
 	-- v8 地面门：滑跑/低速时能量管理也不出手（telemetry24 全案防地面误动）
 	-- v16.2：锁定+武装=满油直通；且停车螺旋里 IAS<40 不得解除油门环（上一局死亡自锁：
@@ -62,9 +42,7 @@ function update()
 	local ft_armed = false
 	pcall(function() ft_armed = craft.Controls.Flaps > 0.5 end)
 	local engaging = ft_armed and craft.AltitudeAgl > 5
-	if not FT_ONLY then
-		energy_band(dt, not lg_on and (engaging or ((ap_on or dc_on) and airborne)))
-	end
+	energy_band(dt, not lg_on and (engaging or ((ap_on or dc_on) and airborne)))
 	_frame = _frame + 1
 	if math.fmod(_frame, 4) == 0 then
 		print(string.format("POS,%d,%.3f,%.1f,%.1f,%.1f",
@@ -83,25 +61,6 @@ function update()
 			print(string.format("TGT,%d,%.3f,-99999,-99999,-99999,-99999,-99999,-99999", _cidn, craft.Time))
 		end
 	end
-	-- FT8 复算（每帧积分，观测用）
-	local ft8_vsLim  = (craft.IAS > 42) and 20 or 5
-	local ft8_vs     = (ft8_altprev == nil) and 0 or ((craft.Altitude - ft8_altprev) / math.max(dt, 1e-3))
-	ft8_altprev      = craft.Altitude
-	local ft8_vtol   = craft.Controls.VTOL or 0
-	local ft8_altTgt = (ft8_vtol > 0) and (500 + 1500 * ft8_vtol) or (500 + 500 * ft8_vtol)
-	local ft8_vsCmd  = math.max(-ft8_vsLim, math.min(ft8_vsLim, 0.25 * (ft8_altTgt - craft.Altitude)))
-	local ft8_err    = ft8_vsCmd - ft8_vs
-	local ft8_airb   = math.max(0, math.min(1, (craft.AltitudeAgl - 5) / 5))
-	local ft8_stick  = (math.abs(craft.Controls.Roll) > 0.05) or (math.abs(craft.Controls.Pitch) > 0.05)
-	-- hold 用 smooth(x,2) 的近似：向目标以 2/s 限速逼近
-	local ft8_holdt  = ft8_stick and 0 or 1
-	if ft8_hold < ft8_holdt then ft8_hold = math.min(ft8_holdt, ft8_hold + 2 * dt)
-	else                          ft8_hold = math.max(ft8_holdt, ft8_hold - 2 * dt) end
-	local ft8_cap    = (craft.IAS < 45) and 8 or 90
-	local ft8_P      = math.min(-30 * craft.Controls.Pitch + ft8_hold * ft8_airb * (0.8 * ft8_err), ft8_cap)
-	local ft8_gate   = (math.abs(craft.Controls.Roll) < 0.05) and (math.abs(craft.Controls.Pitch) < 0.05) and (math.abs(ft8_P) < 25)
-	ft8_I = math.max(-20, math.min(20, ft8_I + (ft8_gate and (ft8_err * 0.35 * dt) or 0)))
-	local ft8_cmd    = math.min(ft8_P + ft8_hold * ft8_airb * ft8_I, ft8_cap)
 	if math.fmod(_frame, 2) == 0 then   -- v4.54 验证通过（app34 目视无振），销诊断态恢复 12 Hz
 		local c = craft.Controls
 		print(string.format("TEL,%d,%.3f,%.1f,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",
@@ -112,9 +71,6 @@ function update()
 			craft.AngleOfAttack, craft.AngleOfSlip, craft.GForce, craft.VerticalG,
 			craft.Fuel,
 			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
-		-- FT8 定高环内部量：目标高/实际高/爬升率指令/误差/P指令/I积分/合成指令/油门杆
-		print(string.format("FT8,%d,%.3f,%.1f,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f",
-			_cidn, craft.Time, ft8_altTgt, craft.Altitude, ft8_vsCmd, ft8_vs, ft8_err, ft8_P, ft8_I, ft8_cmd))
 	end
 end
 
@@ -146,10 +102,6 @@ ap_thr   = false      -- 油门 override 标志
 
 lgear_ovr = false   -- SC-5 app74 起落架通路诊断旗标（MFD 按钮 8）
 function ap_button(id)
-	if FT_ONLY and (id == 1 or id == 5 or id == 9) then
-		print(string.format("FT-ONLY: Lua law button %d disabled (telemetry-only build)", id))
-		return
-	end
 	if id == 1 then
 		ap_on = not ap_on
 		if not ap_on then ap_int = 0; thr_pk = 0 end

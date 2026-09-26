@@ -1,5 +1,7 @@
 # 原始遥测日志与大数据（体积与隐私；格式与脚本在库，数据不随库分发）
-analysis/data/
+analysis/data/*
+# 例外：跑道路表是 ft_ta2_patch.py 运行的必需输入（非隐私、体积小），随库分发
+!analysis/data/runway-locations.json
 tools/
 # 游戏反编译产物（专有代码，仅供个人研究，不发布）
 analysis/decomp/

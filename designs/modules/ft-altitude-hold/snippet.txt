@@ -1,0 +1,23 @@
+# FT 高度自持模块 —— 可直接粘贴的表达式（v0.3.1，2026-09-25）
+# 用法：① 按序放进 craft 级 <Variables> 面板；② 两条零件式接到副翼/升降舵的 InputController.State。
+# 注意：面板 setter 只能引用【排在它前面】的名字；开关量只能在零件上下文读。
+
+## 面板 setter（按此顺序）
+<Setter variable="boot" function="clamp01(Time * 0.25)" priority="0" />
+<Setter variable="cmdPhi" function="-60 * Roll" priority="0" />
+<Setter variable="vs" function="rate(Altitude)" priority="0" />
+<Setter variable="altTgt" function="smooth(Altitude, ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0)" priority="0" />
+<Setter variable="vsLim" function="(IAS > 42 ? 20 : 5)" priority="0" />
+<Setter variable="vsCmd" function="clamp(0.25 * (altTgt - Altitude), -vsLim, vsLim)" priority="0" />
+<Setter variable="vsErr" function="vsCmd - vs" priority="0" />
+<Setter variable="vsInt" function="clamp(sum(((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 0 : vsErr * 0.45), -8, 8)" priority="0" />
+<Setter variable="hold" function="smooth(((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 0 : 1, 2)" priority="0" />
+<Setter variable="cmdThe" function="min(-30 * Pitch + hold * (0.8 * vsErr + vsInt), (IAS < 45 ? 8 : 90))" priority="0" />
+
+## 零件接线（GATE = (Activate8 & (boot > 0.5))）
+副翼  : GATE ? clamp(0.010 * (RollAngle - cmdPhi) + 0.004 * RollRate, -1, 1) : Roll
+升降舵: GATE ? clamp(0.040 * (PitchAngle - cmdThe) - 0.007 * PitchRate, -1, 1) : clamp(Trim + Pitch, -1, 1)
+
+## 座舱读数（Label designText；容量看 width，不看字号）
+左: {round(IAS)}m/s {round(AltitudeAgl)}m
+右: {round(vsCmd * 10) / 10}/{round(vs * 10) / 10} I{round(vsInt * 10) / 10}

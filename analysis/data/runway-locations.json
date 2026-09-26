@@ -1,0 +1,104 @@
+[
+ {
+  "id": "DriftwoodAirport1",
+  "name": "Kunimitsu Airport 1",
+  "pos": "12797,10,-5540",
+  "rot": "0,10,0"
+ },
+ {
+  "id": "DriftwoodAirport2",
+  "name": "Kunimitsu Airport 4",
+  "pos": "12122,10,-6180",
+  "rot": "0,40,0"
+ },
+ {
+  "id": "DriftwoodAirport3",
+  "name": "Kunimitsu Airport 19",
+  "pos": "12980,10,-4500",
+  "rot": "0,190,0"
+ },
+ {
+  "id": "DriftwoodAirport4",
+  "name": "Kunimitsu Airport 22",
+  "pos": "12978,10,-5160",
+  "rot": "0,220,0"
+ },
+ {
+  "id": "DriftwoodAirport5",
+  "name": "Kunimitsu Helipad 1",
+  "pos": "12579.5,49.5,-5282",
+  "rot": "0,141,0"
+ },
+ {
+  "id": "DriftwoodAirport6",
+  "name": "Kunimitsu Helipad 2",
+  "pos": "12558,49.5,-5306",
+  "rot": "0,122,0"
+ },
+ {
+  "id": "BannockAirport1",
+  "name": "Bannock Station 05",
+  "pos": "6533,5.05,-38878.3",
+  "rot": "0,50,0"
+ },
+ {
+  "id": "BannockAirport2",
+  "name": "Bannock Station 23",
+  "pos": "8234,5.05,-37451",
+  "rot": "0,230,0"
+ },
+ {
+  "id": "BannockAirport3",
+  "name": "Bannock Station 08",
+  "pos": "6204,5.05,-38872",
+  "rot": "0,80,0"
+ },
+ {
+  "id": "BannockAirport4",
+  "name": "Bannock Station 26",
+  "pos": "7288,5.05,-38681",
+  "rot": "0,260,0"
+ },
+ {
+  "id": "USSBeastCatapult1",
+  "name": "Catapult A",
+  "pos": "14.75091,20.53757,51.76996",
+  "rot": "0.005194819,357.0016,0.0009567719"
+ },
+ {
+  "id": "USSBeastCatapult2",
+  "name": "Catapult B",
+  "pos": "-4.25909,20.53626,51.76747",
+  "rot": "0.005644383,357.0013,0.0008528279"
+ },
+ {
+  "id": "CochranAirport1",
+  "name": "Cochran Airport 04L",
+  "pos": "12873,3,-29883",
+  "rot": "0,45,0"
+ },
+ {
+  "id": "CochranAirport2",
+  "name": "Cochran Airport 22L",
+  "pos": "15064,3,-27887",
+  "rot": "0,225,0"
+ },
+ {
+  "id": "CochranAirport3",
+  "name": "Cochran Airport 18",
+  "pos": "14477,3,-26945",
+  "rot": "0,180,0"
+ },
+ {
+  "id": "ShepardAirport1",
+  "name": "Shepard Airport 34",
+  "pos": "4380.92,10.5,-2330",
+  "rot": "0,345,0"
+ },
+ {
+  "id": "ShepardAirport2",
+  "name": "Shepard Airport 22",
+  "pos": "4340,10.5,-2556.2",
+  "rot": "0,225,0"
+ }
+]

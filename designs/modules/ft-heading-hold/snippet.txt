@@ -1,0 +1,12 @@
+# FT 航向保持 —— 可直接粘贴的表达式（v0.1，2026-09-25）
+# 前提：与 ft-altitude-hold 共享 hold / GATE / 内环；这里只列**新增**的横向四条。
+# 面板顺序：必须排在 hold 之后、被副翼零件式引用。
+
+<Setter variable="psiTgt" function="atan2(smooth(sin(Heading), ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0), smooth(cos(Heading), ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0))" priority="0" />
+<Setter variable="hdgErr" function="deltaangle(Heading, psiTgt)" priority="0" />
+<Setter variable="bankCd" function="-clamp(1.2 * hdgErr, -30, 30)" priority="0" />
+<Setter variable="phiCmd" function="cmdPhi + hold * bankCd" priority="0" />
+
+副翼: GATE ? clamp(0.010 * (RollAngle - phiCmd) + 0.004 * RollRate, -1, 1) : Roll
+
+# 读数：H{round(Heading)} T{round(psiTgt)}   （实际航向 / 目标航向）

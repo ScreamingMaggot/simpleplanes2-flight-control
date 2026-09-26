@@ -1,0 +1,17 @@
+# FT 航迹保持 —— 可直接粘贴的表达式（v0.1，2026-09-25）
+# 与高度/航向模块共享 hold / GATE / 内环；以下为横向新增（顺序即面板顺序，phiCmd 必须最后）。
+
+<Setter variable="trkNow" function="atan2(rate(Longitude), rate(Latitude))" priority="0" />
+<Setter variable="latTgt" function="smooth(Latitude, ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0)" priority="0" />
+<Setter variable="lonTgt" function="smooth(Longitude, ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0)" priority="0" />
+<Setter variable="tSin" function="smooth(sin(trkNow), ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0)" priority="0" />
+<Setter variable="tCos" function="smooth(cos(trkNow), ((abs(Roll) > 0.05) | (abs(Pitch) > 0.05)) ? 9999 : 0)" priority="0" />
+<Setter variable="trkTgt" function="atan2(tSin, tCos)" priority="0" />
+<Setter variable="xtrack" function="(Latitude - latTgt) * sin(trkTgt) - (Longitude - lonTgt) * cos(trkTgt)" priority="0" />
+<Setter variable="trkErr" function="deltaangle(trkNow, trkTgt)" priority="0" />
+<Setter variable="bankTrk" function="-clamp(trkErr + clamp(0.15 * xtrack, -20, 20), -30, 30)" priority="0" />
+<Setter variable="phiCmd" function="cmdPhi + hold * (Activate1 ? bankTrk : bankCd)" priority="0" />
+
+副翼: GATE ? clamp(0.010 * (RollAngle - phiCmd) + 0.004 * RollRate, -1, 1) : Roll
+
+读数: X{round(xtrack)}m H{round(Heading)}   （横偏 / 航向；横风下 H 会偏离航迹=正常 crab）

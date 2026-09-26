@@ -1,0 +1,339 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Aircraft name="TESTaircraFT" tags="" url="" theme="Default" paintOrigin="0.3759518,5.24044,-4.227597" size="13.03486,4.171371,10.73545" boundsOffset="4.470348E-07,0.1075592,-0.8802274" boundsMin="-6.517431,1.730902,-5.388687" xmlVersion="25" legacyJointIdentification="false" clientVersion="0.7.8.103">
+  <Specifications WingSpan="13.0348625" Length="10.7354469" Height="4.17137051" WingArea="22.65466" WingLoading="61.80688" EmptyWeight="1308.09631" LoadedWeight="1400.21387" PowerToWeightRatio="0" PowerOutput="0" PartCount="35" ControlSurfaceCount="5" PerformanceCost="245.800018" FuelAmount="114.574013" Drag="821.6064" HorsePower="300" HorsePowerToWeightRatio="0.09718364" />
+  <Variables>
+    <Setter variable="AP_Qcmd" function="-Pitch*10" priority="0" />
+  </Variables>
+  <Assembly>
+    <Parts>
+      <Part id="3" partType="FlightComputer-1" position="4.470348E-07,3.924147,-0.9011911" rotation="0,0,0" drag="0,0,0.06173491,0,0.01904833,0.01904833" dragArea="0,0,0.06222294,0,0.02233252,0.02233252" materials="0,1,2,3" partCollisionResponse="Default">
+        <Cockpit.State primaryCockpit="True">
+          <Variables />
+        </Cockpit.State>
+        <FloatingPart.State enabled="true" />
+      </Part>
+      <Part id="1" partType="JFuselage-1" position="-4.774332E-05,3.424147,1.348809" rotation="0,0,0" drag="0.02017161,0,2.058693,4.1706,3.663208,3.663147" dragArea="0.02074097,0,2.639253,4.728859,4.114851,4.114851" materials="0,0,0,0,0,0" partCollisionResponse="Default">
+        <JFuselage.State version="4" offset="0,0,4.999998" mass="-9.265342E-09,-1.374795E-09,0,0.9619454" deadMassKg="0" buoyancy="0" fuelProportion="0.02">
+          <Slice size="1,1" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+          <Slice size="1,1" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+        </JFuselage.State>
+        <Transparency.State opacity="0.1" hideFront="true" hideBack="true" overrideHide="false" hideInside="false" />
+        <FuelTank.State fuel="75.5291061" capacity="75.5291061" />
+      </Part>
+      <Part id="2" partType="JFuselage-1" position="4.470348E-07,3.424147,4.298807" rotation="0,0,0" drag="0.2277239,0,0.5932931,0.5070554,0.6158671,0.6155097" dragArea="0.4848205,0,0.6844525,0.5729697,0.7146393,0.7127783" materials="0,0,0,0,0,0" partCollisionResponse="Default">
+        <JFuselage.State version="4" offset="0,0,0.8999982" mass="-1.258022E-08,2.711038E-09,-0.08380281,0.124685" deadMassKg="0" buoyancy="0" fuelProportion="0.08">
+          <Slice size="1,1" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+          <Slice size="0.7,0.7" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+        </JFuselage.State>
+        <Transparency.State opacity="0.1" hideFront="false" hideBack="true" overrideHide="false" hideInside="false" />
+        <FuelTank.State fuel="39.0449066" capacity="39.0449066" />
+      </Part>
+      <Part id="4" partType="JFuselage-1" position="4.470348E-07,3.474147,-2.651188" rotation="0,0,0" drag="0,0.0375981,1.980479,2.04798,2.280026,2.279876" dragArea="0,0.4874131,2.307405,2.385181,2.627836,2.627836" materials="0,0,0,0,0,0" partCollisionResponse="Default">
+        <JFuselage.State version="4" offset="0,-0.1,2.999999" mass="-1.260983E-08,-0.009543565,0.2863068,0.413597" deadMassKg="0" buoyancy="0" fuelProportion="0">
+          <Slice size="0.6,0.8" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+          <Slice size="1,1" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+        </JFuselage.State>
+        <Transparency.State opacity="0.1" hideFront="true" hideBack="true" overrideHide="false" hideInside="false" />
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="5" partType="JFuselage-1" position="4.470348E-07,3.574147,-4.476187" rotation="0,0,0" drag="0,0.06069786,0.1315222,0.2092195,0.3581523,0.3581231" dragArea="0,0.2696328,0.1866688,0.274818,0.4224567,0.4224567" materials="0,0,0" partCollisionResponse="Default">
+        <JFuselage.State version="4" offset="0,-0.1000001,0.6499987" mass="-1.160386E-08,-0.0113568,0.07381889,0.03885119" deadMassKg="0" buoyancy="0" fuelProportion="0">
+          <Slice size="0.3,0.6" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+          <Slice size="0.6,0.8" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+        </JFuselage.State>
+        <Transparency.State opacity="0.1" hideFront="true" hideBack="true" overrideHide="false" hideInside="false" />
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="6" partType="JFuselage-1" position="4.470348E-07,3.674147,-5.001186" rotation="0,0,0" drag="0,0.07351865,0.03014558,0.05791205,0.1508394,0.1507445" dragArea="0,0.1607426,0.0466672,0.08296392,0.1749383,0.1749383" materials="0,0,0" partCollisionResponse="Default">
+        <JFuselage.State version="4" offset="-3.72529E-09,-0.1000002,0.3999987" mass="-8.953235E-09,-0.01829871,0.07319441,0.007674989" deadMassKg="0" buoyancy="0" fuelProportion="0">
+          <Slice size="0.1,0.3" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+          <Slice size="0.3,0.6" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
+        </JFuselage.State>
+        <Transparency.State opacity="0.1" hideFront="true" hideBack="false" overrideHide="false" hideInside="false" />
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="10" partType="JWing-1" position="0.4999523,3.424147,0.8488094" rotation="0,0,0" drag="0.4937775,0.09498145,8.186802,8.263442,0,0.1002482" dragArea="1.083714,0.8244541,8.407782,8.350735,0,0.4522332" centerOfMass="1.953504,0.0678715,0.7294331" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <JWing.State chordSamples="10" colliderSamples="5" flipped="false" fuelFraction="0" version="3" disableWingtipVortices="false">
+          <Slice position="0" airfoil="Semi-Symmetric" smoothJoin="true" offset="0.4503629" scale="1.900725" bend="2" />
+          <Slice position="6" smoothJoin="true" offset="0.2" scale="1.05" />
+        </JWing.State>
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="11" partType="ControlSurface-Flap-1" position="4.61661,3.588903,0.7280328" rotation="0.04004214,359.0444,1.930265" drag="0,0.01944975,0.440166,0.4500285,0,0.0005838569" dragArea="0,0.1088902,0.4511164,0.4511164,0,0.01674939" materials="3,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <ControlSurfacePart.State style="StandardFlap" range="4.099999,5.799998" startPos="-0.1102332,-0.08293489" maxDeflection="30" dummyWingOffset="0.2792816,0.2083455" dummyWingScale="1.319396,1.078358" />
+        <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="clamp(Roll - 0.008*RollRate, -1, 1)" zeroOnDeactivate="false" />
+      </Part>
+      <Part id="16" partType="JWing-1" position="0.3125004,3.536647,-3.901188" rotation="0,0,0" drag="0,0.001972426,1.019936,1.019773,0,0.05302149" dragArea="0,0.01555573,1.044826,1.044826,0,0.1191068" centerOfMass="0.5443685,0,0.1178468" materials="0,2" symmetryId="6" partCollisionResponse="Default">
+        <JWing.State chordSamples="10" colliderSamples="5" flipped="false" fuelFraction="0" version="3" disableWingtipVortices="false">
+          <Slice position="0" airfoil="Symmetric" smoothJoin="true" offset="0.07500005" scale="1.15" />
+          <Slice position="1.6" smoothJoin="true" offset="-0.4" scale="0.725" />
+        </JWing.State>
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="17" partType="ControlSurface-Flap-1" position="0.3125004,3.536647,-4.068619" rotation="0,13.54333,0" drag="0,0.01743666,0.4575527,0.4575628,0,0.005583131" dragArea="0,0.1503721,0.4614869,0.4614869,0,0.005583131" materials="3,2" symmetryId="7" partCollisionResponse="Default">
+        <ControlSurfacePart.State style="StandardFlap" range="0,1.6" startPos="-0.1549999,-0.5450001" maxDeflection="30" dummyWingOffset="0.07500005,-0.4" dummyWingScale="1.15,0.725" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="clamp(Trim + PID(-Pitch*10, PitchAngle, -0.10, 0, 0), -1, 1)" zeroOnDeactivate="false" />
+      </Part>
+      <Part id="18" partType="JWing-1" position="-0.3124996,3.536647,-3.901188" rotation="0,0,180" drag="0,0.001972426,1.019855,1.019712,0.05302149,0" dragArea="0,0.01555573,1.044826,1.044826,0.1191068,0" centerOfMass="0.5443685,0,0.1178468" materials="0,2" symmetryId="6" partCollisionResponse="Default">
+        <JWing.State chordSamples="10" colliderSamples="5" flipped="true" fuelFraction="0" version="3" disableWingtipVortices="false">
+          <Slice position="0" airfoil="Symmetric" smoothJoin="true" offset="0.07500005" scale="1.15" />
+          <Slice position="1.6" smoothJoin="true" offset="-0.4" scale="0.725" />
+        </JWing.State>
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="20" partType="JWing-1" position="4.470348E-07,3.902272,-4.163687" rotation="0,0,90" drag="0.04632151,0.007269507,0.04664686,0,1.309278,1.309402" dragArea="0.1451869,0.09851966,0.2022246,0,1.341819,1.341819" centerOfMass="0.6091557,0,-0.2393592" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <JWing.State chordSamples="10" colliderSamples="5" flipped="false" fuelFraction="0" version="3" disableWingtipVortices="false">
+          <Slice position="0" airfoil="Symmetric" smoothJoin="true" offset="-0.25" scale="1.5" />
+          <Slice position="2" smoothJoin="true" offset="-1" scale="0.45" />
+        </JWing.State>
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="21" partType="ControlSurface-Flap-1" position="4.470348E-07,3.902272,-4.729902" rotation="345.1939,0,90" drag="0,0.01783318,0,0,0.5794685,0.5794977" dragArea="0,0.1503721,0,0,0.5843668,0.5843668" materials="3,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <ControlSurfacePart.State style="StandardFlap" range="0,2" startPos="-0.55,-1.09" maxDeflection="30" dummyWingOffset="-0.25,-1" dummyWingScale="1.5,0.45" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="clamp(Yaw - 0.04*YawRate, -1, 1)" zeroOnDeactivate="false" />
+      </Part>
+      <Part id="22" partType="GearLeg-1" position="4.470348E-07,3.228834,3.278496" rotation="0,0,0" drag="0.04754157,0.0419903,0,0.001148887,0.03189318,0.0338126" dragArea="0.06222294,0.05703769,0,0.002592621,0.042804,0.04466504" name="Hollow Gear Leg" materials="0,4,4,4,4,4,0,0,4,4,4" symmetryDisabled="true" partCollisionResponse="Default">
+        <GearLeg.State gearLegStyle="GL-VFrameHollow" size="0.7" flipped="false" supportStrutType0="ST-PistonShort" supportStrutType1="" supportStrutType2="" torqueLinkType="TL-Slanted" suspensionTravel="0.3" torqueLinkLength="0.4" springForceScale="1" damperScale="1" catapultConnectorEnabled="false" catapultAcceleration="1" catapultNoseCompression="0" targetLaunchSpeed="175">
+          <Variables />
+        </GearLeg.State>
+        <Animator.State animationDuration="4">
+          <Keyframe name="Keyframe" percent="0">
+            <Pose element="door2" position="5.960464E-08,0,0" rotation="0,0,0,1" hasPosition="false" hasRotation="true" />
+            <Pose element="door1" position="0,0,0" rotation="0,0,0,1" hasPosition="false" hasRotation="true" />
+          </Keyframe>
+          <Keyframe name="Keyframe" percent="0.09186352">
+            <Pose element="door1" position="0,0,2.980232E-08" rotation="0,0,0.7933533,0.6087614" hasPosition="false" hasRotation="true" />
+            <Pose element="door2" position="5.960464E-08,0,0" rotation="0,0,0.7933533,0.6087614" hasPosition="false" hasRotation="true" />
+          </Keyframe>
+          <Keyframe name="Start" percent="0.1496063">
+            <Pose element="Wheel" position="0,-0.08949852,1.282929" rotation="0.5,0.5,-0.5000002,-0.4999999" hasPosition="true" hasRotation="true" />
+            <Pose element="MainStrut" position="0,-0.1379203,0" rotation="0,0,0,1" hasPosition="true" hasRotation="false" />
+          </Keyframe>
+          <Keyframe name="End" percent="1">
+            <Pose element="Wheel" position="0,-1.313045,0" rotation="-1.192093E-07,-4.371139E-08,-4.440892E-16,-1" hasPosition="true" hasRotation="true" />
+            <Pose element="MainStrut" position="0,8.940697E-08,0" rotation="0,0,0,1" hasPosition="true" hasRotation="true" />
+            <Pose element="SupportStrut" position="0,0.03236866,1.199256" rotation="0,0,0,1" hasPosition="true" hasRotation="false" />
+          </Keyframe>
+        </Animator.State>
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="LandingGear" />
+      </Part>
+      <Part id="23" partType="JWheelAssembly-1" position="4.470348E-07,2.309702,3.278496" rotation="1.366038E-05,5.008956E-06,6.48003E-13" drag="0.08102197,0.07524702,0,0.05573628,0.1803754,0.1806162" dragArea="0.116668,0.116668,0,0.09851966,0.200993,0.200993" materials="6,0,2,0,8,4,4,4,4,4" symmetryDisabled="true" partCollisionResponse="Default">
+        <JWheelAssembly.State turningAngle="45" turningAngleDampening="0.5" reversed="true" size="1" width="1" tire="TireLadingGeaGrooved" rim="RimLandingGearSmooth" turningRate="150" brake="1" frictionPreset="LandingGear" tractionForward="1" tractionSideways="1" frictionForcePoint="0" wheelAssemblyStyle="WA-SingleOffset" rimOffset="0.5" wheelOffset="0.54" flipped="false" useWorldUpAxis="true">
+          <Variables />
+        </JWheelAssembly.State>
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Yaw" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Brake" />
+      </Part>
+      <Part id="24" partType="GearBay-1" position="-0.01253185,2.924147,3.650844" rotation="270,180,0" drag="0.01378665,0.01539306,0.008987755,0.3511329,0.08612619,0.08291506" dragArea="0.0466672,0.04407457,0.01037049,0.4200049,0.1526057,0.1507446" materials="15,15,15,15,15,15" symmetryDisabled="true" partCollisionResponse="Default">
+        <PartTargeting.State targetMode="MultipleParts" partIds="2,1" />
+        <GearBay.State cornerRadius="0.2" upperSpan="-0.2626635273300566828523749039,0.2370679334039887586883815721" lowerSpan="-0.2622090893323833775665849603,0.2878046832584513017305782920" height="0.900" depth="0.8" penetration="0.75" doorStyle="DoubleSideways" doorThickness="0.02" mirrored="false" autoHinge="true" hingePos="0.2512763,0.1979639,0.00181794" hingeRot="0.7042068,0.01983381,0.01998111,0.7094366" hingePos2="-0.262235,-0.3986585,-4.132081E-08" hingeRot2="-0.0001742246,0.690134,0.7236816,-0.0001826937" />
+        <Animator.State animationDuration="2">
+          <Keyframe name="Start" percent="0">
+            <Pose element="door2" position="0,0,0" rotation="0,0,0,1" hasPosition="false" hasRotation="true" />
+            <Pose element="door1" position="0,0,0" rotation="0,0,0,1" hasPosition="false" hasRotation="true" />
+          </Keyframe>
+          <Keyframe name="End" percent="0.2">
+            <Pose element="door2" position="0,0,0" rotation="0,0,0.9659261,0.2588191" hasPosition="false" hasRotation="true" />
+            <Pose element="door1" position="0,0,0" rotation="0,0,0.9659261,0.2588191" hasPosition="false" hasRotation="true" />
+          </Keyframe>
+        </Animator.State>
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="LandingGear" />
+      </Part>
+      <Part id="25" partType="GearLeg-1" position="2.499952,3.486647,0.4738094" rotation="8.537739E-07,270,0" drag="0.0737728,0.07806334,0.002928137,0,0,0.06094006" dragArea="0.09851966,0.1011123,0.007777864,0,0,0.08188591" name="Wing Gear Leg" materials="0,0,4,4,4,0,0,0,4,4,4" symmetryId="5" partCollisionResponse="Default">
+        <GearLeg.State gearLegStyle="GL-Wing" size="0.75" flipped="false" supportStrutType0="None" supportStrutType1="" supportStrutType2="" torqueLinkType="TL-Slanted" suspensionTravel="0.3" torqueLinkLength="0.07" springForceScale="1" damperScale="1" catapultConnectorEnabled="false" catapultAcceleration="1" catapultNoseCompression="0" targetLaunchSpeed="175">
+          <Variables />
+        </GearLeg.State>
+        <Animator.State animationDuration="4">
+          <Keyframe name="Keyframe" percent="0">
+            <Pose element="MainStrut" position="0,-0.01658589,2.471491E-10" rotation="-0.999391,4.741521E-08,-3.885781E-16,0.03489949" hasPosition="false" hasRotation="true" />
+            <Pose element="Wheel" position="-0.006249697,0.02782079,1.271626" rotation="0.5086501,-0.4911978,0.50865,-0.4911976" hasPosition="true" hasRotation="true" />
+          </Keyframe>
+          <Keyframe name="End" percent="1">
+            <Pose element="Wheel" position="-0.006249772,-1.288986,-5.47152E-08" rotation="-8.29017E-08,0.7071069,4.290286E-08,0.7071068" hasPosition="true" hasRotation="true" />
+            <Pose element="MainStrut" position="0,-0.01658589,2.471491E-10" rotation="-1.264406E-07,-0.7431449,-0.6691308,-8.42937E-08" hasPosition="true" hasRotation="true" />
+          </Keyframe>
+        </Animator.State>
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="LandingGear" />
+      </Part>
+      <Part id="26" partType="JWheelAssembly-1" position="2.499952,2.519907,0.4691221" rotation="-1.019375E-05,4.829673E-06,-2.387271E-06" drag="0.06164339,0.06166372,0.0127496,0.05811539,0,0.2396149" dragArea="0.09333441,0.09592704,0.02333359,0.08814917,0,0.2586855" materials="6,0,2,0,5,4,4,4,4,4" symmetryId="4" partCollisionResponse="Default">
+        <JWheelAssembly.State turningAngle="0" turningAngleDampening="0.5" reversed="false" size="1.15" width="0.7" tire="TireLadingGeaGrooved" rim="RimLandingGearStang" turningRate="150" brake="1" frictionPreset="Racing" tractionForward="1" tractionSideways="1" frictionForcePoint="0" wheelAssemblyStyle="WA-SingleOffsetWing" rimOffset="0.5" wheelOffset="0.54" flipped="false" useWorldUpAxis="true">
+          <Variables />
+        </JWheelAssembly.State>
+        <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="Yaw" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Brake" />
+      </Part>
+      <Part id="12" partType="ControlSurface-Flap-1" position="-0.3124996,3.536647,-4.068619" rotation="1.173E-06,346.4567,180" drag="0,0.01743666,0.4575527,0.4575628,0.005583131,0" dragArea="0,0.1503721,0.4614869,0.4614869,0.005583131,0" materials="3,2" symmetryId="7" partCollisionResponse="Default">
+        <ControlSurfacePart.State style="StandardFlap" range="0,1.6" startPos="-0.1549999,-0.5450001" maxDeflection="30" dummyPartFlipped="true" dummyWingOffset="0.07500005,-0.4" dummyWingScale="1.15,0.725" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="clamp(Trim + PID(-Pitch*10, PitchAngle, -0.10, 0, 0), -1, 1)" zeroOnDeactivate="false" />
+      </Part>
+      <Part id="13" partType="MFD-1" position="-0.007058352,3.812595,2.780992" rotation="270,0,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2,3" symmetryDisabled="true" partCollisionResponse="Default">
+        <Mfd.State targetingPod="0" />
+      </Part>
+      <Part id="14" partType="ModifierWindow-1" position="-4.774332E-05,3.924147,2.080988" rotation="90,1.207418E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="15" symmetryDisabled="true" partCollisionResponse="Default">
+        <PartTargeting.State targetMode="MultipleParts" partIds="1" />
+        <Transparency.State opacity="0.05" hideFront="false" hideBack="false" overrideHide="false" hideInside="false" />
+        <ProceduralWindow.State cornerRadius="0" upperSpan="-0.35,0.35" lowerSpan="-0.35,0.35" height="1.4" depth="1" penetration="0.88" hideGlass="True" />
+      </Part>
+      <Part id="15" partType="Seat-1" position="-4.774332E-05,3.767897,1.973809" rotation="0,0,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <Seat.State primarySeat="True" reclination="0.0" exitPosition="0,0,0" exitRotation="0,0,0" />
+        <IKSeat.State maintainHeadRotation="1.00" designerCharacter="Chad (FS)" fpvTracking="true" selfAssignTargets="false" />
+        <IKTarget.State path="LeftElbowTarget" type="LeftElbow" priority="10" />
+        <IKTarget.State path="RightElbowTarget" type="RightElbow" priority="10" />
+        <CockpitSound.State activationGroup="AlwaysOn" intensity="1" />
+      </Part>
+      <Part id="19" partType="Gauge-1" position="-0.1941404,3.773148,2.780992" rotation="270.0198,0,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="17,17,18,17" symmetryDisabled="true" partCollisionResponse="Default">
+        <Gauge.State type="Speed400" face="AirSpeed400Indicator" trimType="Trim1" scale="1" rotationType="Indicator" faceInput="Disabled" invert="false" faceZero="0" faceMultiplier="0" faceEmissionDay="1" faceEmissionNight="1" hideBase="False" hideFace="False" hideTrim="False" speedUnit="MilesPerHour">
+          <Indicator input="max(20, IAS * 2.0132424) - 20" invert="false" indicator="Indicator1" multiplier="1" zero="20" />
+        </Gauge.State>
+      </Part>
+      <Part id="27" partType="Gauge-ADI-1" position="0.1767965,3.782437,2.780992" rotation="270,-2.263909E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="17,17,18,17" symmetryDisabled="true" partCollisionResponse="Default">
+        <AttitudeBall.State scale="1" />
+      </Part>
+      <Part id="28" partType="Control-Yoke-1" position="-0.01760516,3.652509,2.570992" rotation="0,0,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,3,6,1" symmetryDisabled="true" partCollisionResponse="Default">
+        <PosedGrip.State pose="YokeRight" gripTarget="MoveRoot/GripTargetR" gripType="FlightStick" colliders="MoveRoot/Colliders/SideR" previewPose="Right" screenYPositionAxisMap="0,0,1" screenXRotationAxisMap="0,0,-1" screenAxisSize="0.25,0.25" screenAxisDeadzone="0.05,0.05">
+          <ControlBinding control="Default" asButton="true" controlPath="triggerPressed" processor="" />
+          <ControlBinding control="Default" asButton="true" controlPath="primaryButton" processor="" />
+          <ControlBinding control="Default" asButton="true" controlPath="secondaryButton" processor="" />
+        </PosedGrip.State>
+        <PosedGrip.State pose="YokeLeft" gripTarget="MoveRoot/GripTargetL" gripType="Throttle" colliders="MoveRoot/Colliders/SideL" previewPose="Left" screenYPositionAxisMap="0,0,1" screenXRotationAxisMap="0,0,-1" screenAxisSize="0.25,0.25" screenAxisDeadzone="0.05,0.05">
+          <ControlBinding control="Default" asButton="true" controlPath="triggerPressed" processor="" />
+          <ControlBinding control="Default" asButton="true" controlPath="primaryButton" processor="" />
+          <ControlBinding control="Default" asButton="true" controlPath="secondaryButton" processor="" />
+        </PosedGrip.State>
+        <IKTarget.State path="MoveRoot/PoseRoot/Pose-LeftHand" type="LeftHand" priority="6" />
+        <IKTarget.State path="MoveRoot/PoseRoot/Pose-RightHand" type="RightHand" priority="6" />
+        <ControlBase.State haptics="true" ignoreAircraftCollisions="true">
+          <PositionAxis axis="0,0,1" input="Pitch" scale="0.2" min="-1" max="1" />
+          <RotationAxis axis="0,0,-1" input="Roll" scale="90" min="-1" max="1" rotationMaxDistance="0.08" />
+        </ControlBase.State>
+      </Part>
+      <Part id="31" partType="Cockpit-Canopy-1" position="-4.774332E-05,3.963022,-0.1511906" rotation="0,0,0" drag="0.1165256,0.06482571,1.859449,0,1.088952,1.089105" dragArea="0.4044492,0.3059295,2.431848,0,1.36043,1.36043" materials="7,15,16" symmetryDisabled="true" partCollisionResponse="Default">
+        <Canopy.State opacity="0.1" showInside="true" activationGroup="1" animationSpeed="1" dragWhenOpen="10" />
+        <Canopy.State opacity="0.1" showInside="true" />
+      </Part>
+      <Part id="29" partType="JWing-1" position="-0.4999514,3.424147,0.8488094" rotation="0,0,180" drag="0.4937776,0.09498148,8.187533,8.263817,0.1002482,0" dragArea="1.083714,0.8244541,8.410375,8.353328,0.4522332,0" centerOfMass="1.953493,0,0.7294818" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <JWing.State chordSamples="10" colliderSamples="5" flipped="true" fuelFraction="0" version="3" disableWingtipVortices="false">
+          <Slice position="0" airfoil="Semi-Symmetric" smoothJoin="true" offset="0.4504141" scale="1.900828" bend="2" />
+          <Slice position="6" smoothJoin="true" offset="0.2" scale="1.05" />
+        </JWing.State>
+        <FuelTank.State fuel="0" capacity="0" />
+      </Part>
+      <Part id="30" partType="ControlSurface-Flap-1" position="-4.61661,3.588903,0.7280391" rotation="0.04003381,0.9553766,178.0697" drag="0,0.01944975,0.440166,0.4500285,0.0005838569,0" dragArea="0,0.1088902,0.4511164,0.4511164,0.01674939,0" materials="3,2" symmetryDisabled="true" partCollisionResponse="Default">
+        <ControlSurfacePart.State style="StandardFlap" range="4.099999,5.799998" startPos="-0.1102266,-0.0829341" maxDeflection="30" dummyPartFlipped="true" dummyWingOffset="0.2792978,0.2083472" dummyWingScale="1.319429,1.078361" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="clamp(Roll - 0.008*RollRate, -1, 1)" zeroOnDeactivate="false" />
+      </Part>
+      <Part id="32" partType="GearLeg-1" position="-2.499952,3.486647,0.4738094" rotation="8.537739E-07,90,0" drag="0.07377279,0.07806333,0.002928137,0,0.06094007,0" dragArea="0.09851966,0.1011123,0.007777864,0,0.08188591,0" name="Wing Gear Leg" materials="0,0,4,4,4,0,0,0,4,4,4" symmetryId="5" partCollisionResponse="Default">
+        <GearLeg.State gearLegStyle="GL-Wing" size="0.75" flipped="true" supportStrutType0="None" supportStrutType1="" supportStrutType2="" torqueLinkType="TL-Slanted" suspensionTravel="0.3" torqueLinkLength="0.07" springForceScale="1" damperScale="1" catapultConnectorEnabled="false" catapultAcceleration="1" catapultNoseCompression="0" targetLaunchSpeed="175">
+          <Variables />
+        </GearLeg.State>
+        <Animator.State animationDuration="4">
+          <Keyframe name="Keyframe" percent="0">
+            <Pose element="MainStrut" position="0,-0.01658589,2.471491E-10" rotation="-0.999391,-4.741521E-08,3.885781E-16,0.03489949" hasPosition="false" hasRotation="true" />
+            <Pose element="Wheel" position="0.006249697,0.02782079,1.271626" rotation="0.5086501,0.4911978,-0.50865,-0.4911976" hasPosition="true" hasRotation="true" />
+          </Keyframe>
+          <Keyframe name="End" percent="1">
+            <Pose element="Wheel" position="0.006249772,-1.288986,-5.47152E-08" rotation="-8.29017E-08,-0.7071069,-4.290286E-08,0.7071068" hasPosition="true" hasRotation="true" />
+            <Pose element="MainStrut" position="0,-0.01658589,2.471491E-10" rotation="-1.264406E-07,0.7431449,0.6691308,-8.42937E-08" hasPosition="true" hasRotation="true" />
+          </Keyframe>
+        </Animator.State>
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="LandingGear" />
+      </Part>
+      <Part id="33" partType="JWheelAssembly-1" position="-2.499952,2.519907,0.4691221" rotation="-1.019375E-05,-4.829673E-06,2.387271E-06" drag="0.06164339,0.06166372,0.0127496,0.05811539,0.2396149,0" dragArea="0.09333441,0.09592704,0.02333359,0.08814917,0.2586855,0" materials="6,0,2,0,5,4,4,4,4,4" symmetryId="4" partCollisionResponse="Default">
+        <JWheelAssembly.State turningAngle="0" turningAngleDampening="0.5" reversed="false" size="1.15" width="0.7" tire="TireLadingGeaGrooved" rim="RimLandingGearStang" turningRate="150" brake="1" frictionPreset="Racing" tractionForward="1" tractionSideways="1" frictionForcePoint="0" wheelAssemblyStyle="WA-SingleOffsetWing" rimOffset="0.5" wheelOffset="0.54" flipped="true" useWorldUpAxis="true">
+          <Variables />
+        </JWheelAssembly.State>
+        <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="Yaw" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Brake" />
+      </Part>
+      <Part id="34" partType="AirBrake-1" position="0.4999523,3.361647,0.03630939" rotation="0,0,270" drag="0,0,0,0,0,0.2249748" dragArea="0,0,0,0,0,0.2270477" materials="3,4" symmetryId="3" partCollisionResponse="Default">
+        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="Brake" />
+      </Part>
+      <Part id="35" partType="AirBrake-1" position="-0.4999514,3.361647,0.03630939" rotation="0,0,90" drag="0,0,0,0,0.2249748,0" dragArea="0,0,0,0,0.2270477,0" materials="3,4" symmetryId="3" partCollisionResponse="Default">
+        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="Brake" />
+      </Part>
+      <Part id="7" partType="JPropEngineRadial" position="4.470348E-07,3.424147,4.903806" rotation="0,180,0" drag="0.2971247,0,0.1495384,0.1497214,0.1399286,0.1414466" dragArea="0.3681525,0,0.199632,0.2048172,0.1879656,0.1898267" centerOfMass="0,0,0.2635" materials="1,3,3,4,4,1,-3" partCollisionResponse="Default">
+        <JEngine.State engineConfiguration="1" cylinderRows="1" engineTuning="0" size="1" mass="1.80000007" horsePower="300" rpm="2250" supercharger="false" forcedInduction="1" powerCurve="0" soundPitchLimit="-1" soundPitchOffset="-1" soundPitchRange="-1">
+          <Variables />
+        </JEngine.State>
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Throttle" zeroOnDeactivate="false" />
+      </Part>
+      <Part id="8" partType="JGearbox-1" position="4.470348E-07,3.424147,4.903806" rotation="0,180,0" drag="0.02224571,0,0.04016021,0.04016022,0.0342578,0.03422861" dragArea="0.0466672,0,0.05185244,0.05185244,0.04652609,0.04652609" materials="6,4,4,4" partCollisionResponse="Default">
+        <JGearbox.State size="1.15" reversed="false" gearRatio="2" />
+      </Part>
+      <Part id="9" partType="PropellerAssembly-1" position="4.470348E-07,3.424147,5.076306" rotation="90,0,0" drag="0.01942941,0,0.03788278,0.03788277,0.04385496,0.04384765" dragArea="0.0362967,0,0.05185244,0.05185244,0.05955339,0.05955339" materials="0,1,2,3,4,5,6,1" partCollisionResponse="Default">
+        <PropellerAssembly.State version="1" autoFeather="false" bladeCount="6" chordRadiusRatio="0.15" chordScale="1.1" contraRotating="false" defaultDiameter="2" density="2000" dragScalar="1" hubScale="1" isWaterProp="false" maxPitch="25.0000019" pitchControlType="Auto" reversePitch="12" reverseBladeDirection="false" size="1.07" thrustScalar="1" bladeBlurCount="30" bladeBlurSpread="30" twistAngleRoot="45" pushProp="false" propeller="Civilian" hub="Round">
+          <Variables />
+        </PropellerAssembly.State>
+        <InputController.State activationGroup="8" invert="false" min="0" max="1" input="VTOL" />
+        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="Disabled" zeroOnDeactivate="false" />
+      </Part>
+    </Parts>
+    <Connections>
+      <Connection partA="1" partB="3" attachPointsA="2" attachPointsB="0" />
+      <Connection partA="1" partB="2" attachPointsA="1" attachPointsB="0" />
+      <Connection partA="1" partB="4" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="22" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="24" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="14" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="19" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="27" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="28" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="13" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="15" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="31" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="10" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="29" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="34" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="35" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="7" partB="2" attachPointsA="1" attachPointsB="1" />
+      <Connection partA="4" partB="5" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="16" partB="4" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="18" partB="4" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="5" partB="6" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="20" partB="5" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="11" partB="10" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="25" partB="10" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="17" partB="16" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="12" partB="18" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="21" partB="20" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="23" partB="22" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="26" partB="25" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="30" partB="29" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="32" partB="29" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="33" partB="32" attachPointsA="0" attachPointsB="1" />
+      <Connection partA="8" partB="7" attachPointsA="0" attachPointsB="0" />
+      <Connection partA="9" partB="8" attachPointsA="0" attachPointsB="1" />
+    </Connections>
+    <Bodies>
+      <Body partIds="3,1,2,7,8,4,5,6,20,21,16,17,18,12,22,23,24,14,19,27,28,13,15,31,10,11,25,26,29,30,32,33,34,35" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
+      <Body partIds="9" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
+    </Bodies>
+  </Assembly>
+  <Theme name="Custom">
+    <Material style="SolidColor" color="000000FF" s="0.08" m="0.65" ed="0" en="0" hidden="true" />
+    <Material style="SolidColor" color="FFFFFFFF" s="0.08" m="0.65" ed="0" en="0" hidden="true" />
+    <Material style="SolidColor" color="000000FF" s="0.08" m="0.65" ed="0" en="0" hidden="true" />
+    <Material style="SolidColor" color="D0D0D0FF" s="0.08" m="0.65" ed="0" en="0" hidden="true" />
+    <Material style="SolidColor" color="E9E9E9FF" s="0.7" m="0.5" ed="0" en="0" />
+    <Material style="SolidColor" color="000000FF" s="0.83" m="0.5" ed="0" en="0" />
+    <Material style="SolidColor" color="001F7FFF" s="0.83" m="0.5" ed="0" en="0" />
+    <Material style="SolidColor" color="AA2A00FF" s="0.7" m="0.5" ed="0" en="0" />
+    <Material style="SolidColor" color="3F3F3FFF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="5C0000FF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="FFFFFFFF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="FFF0F0FF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="FF0F0FFF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="AAAAAAFF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="3F3F3FFF" s="0.7" m="0.5" ed="0" en="0" />
+    <Material style="SolidColor" color="ABABABFF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="446677FF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="FF1143FF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="FF6A12FF" s="0.08" m="0.65" ed="0" en="0" />
+    <Material style="SolidColor" color="0080FFFF" s="1" m="0.54" ed="0" en="0" />
+    <Material style="SolidColor" color="74B9FFFF" s="0" m="0" ed="0" en="0" />
+    <Material style="SolidColor" color="232323FF" s="0.5" m="0.5" ed="0" en="0" />
+    <Material style="SolidColor" color="FFFFFFFF" s="0" m="0" ed="1" en="1" />
+    <Material style="SolidColor" color="171717FF" s="0.7" m="0.5" ed="0" en="0" />
+  </Theme>
+  <CraftDrag drag="0.2724198,0.2724198,1,1,0.8405047,0.8405047" dragArea="4.282938,4.282938,29.66828,29.66828,13.21427,13.21427" />
+</Aircraft>
