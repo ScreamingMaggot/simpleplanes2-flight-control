@@ -435,7 +435,7 @@
     <Setter variable="cmdTheF_P" function="min(-30 * Pitch + hold * airb * (0.8 * vsErrH), (IAS &lt; 45 ? 8 : 90))" priority="0" />
     <Setter variable="cmdTheF_I" function="clamp(sum(((abs(Roll) &lt; 0.05) &amp; (abs(Pitch) &lt; 0.05) &amp; (abs(vsCmdH) &lt; (vsLim - 0.5))) ? vsErrH * 0.35 : (0 - cmdTheF_I * 1.5)), -20, 20)" priority="0" />
     <Setter variable="cmdTheF" function="min(cmdTheF_P + hold * airb * cmdTheF_I, (IAS &lt; 45 ? 8 : 90))" priority="0" />
-    <Setter variable="cmdThe" function="min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (0 - vs - 1.5), 0, 8)), (IAS &lt; 45 ? 8 : 90))" priority="0" />
+    <Setter variable="cmdThe" function="min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (vsCmd - vs), 0, 8)), (IAS &lt; 45 ? 8 : 90))" priority="0" />
     <Setter variable="phiCmdF" function="cmdPhi" priority="0" />
     <Setter variable="phiCmd" function="cmdPhi + hold * airb * bankTrk" priority="0" />
     <Setter variable="VAPP" function="55" priority="0" />
