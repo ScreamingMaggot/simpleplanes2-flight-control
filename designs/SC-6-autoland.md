@@ -1404,3 +1404,7 @@ cid=64331 逐帧：ENROUTE **正确**（从 1824m/300 一路沿 K19 轴收进：
 cid=64331 seg2：ENROUTE 正常（爬到 K19 上空、SD→4850），但随后又 LT −27→−3892 外扩（与 v2.31.1 同症，**不是坡限**）。
 真因：四态识别用 `NT`(距离) 但**消费端 AIL/ELE/APP_GATE 仍乘 `clamp01(rwyOk)`(走廊制)** ⇒ 飞出走廊 rwyOk=0 ⇒ mode-7 横向(含 bankApp)整段被门掉 ⇒ 不转弯 → 飞走。
 **改**：新增 `rwyEng = (rwyOk | AU>0.5)`（走廊**或** 四态识别到目标），AIL/ELE/APP_GATE 的 `clamp01(rwyOk)→clamp01(rwyEng)`；`altTgt` 的盘旋下降改**独立于走廊**（`orbit? Alt−400 : min(旋钮,走廊线)`）。--apply 指纹 `910e8a39`，面板 599。
+
+## v2.31.3（2026-09-26）四态盘旋仍外扩 → **切线项符号反**（实测定符号）
+
+cid=54835：ENROUTE 正常；进盘旋后 LT 单调外扩、航迹≈航向（无侧滑）。由实测位移反推映射 dSD=−v·cos(h−AH)、dLT=−v·sin(h−AH)，据此数值检验：当前式 `AH+atan2(...)` **发散 505→3713**，取反式 `AH−atan2(...)` **有界 503→520**。⇒ 改 `hCmd` 盘旋项 `+ atan2 → − atan2`。（前几刀：坡限 30→55、rwyEng 均为真、保留。）--apply。

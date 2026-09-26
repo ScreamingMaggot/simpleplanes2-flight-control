@@ -226,7 +226,8 @@ PANEL += [
     ("h1",   "clamp01((PH > 0.5) & (PH < 1.5))"),
     ("h2",   "clamp01(PH > 1.5)"),
     # 横向目标航向（算术选路，无嵌套三元）：ENROUTE=朝入口 AB；ORBIT=绕 FAF(4850,0)、圆心在右(LT=-200)的切线；FINAL=跑道航向 AH
-    ("hCmd", "h0 * " + AB + " + h1 * (" + AH + " + atan2(0 - (" + AS + " - 4850), 0 - (" + AL + " + 200))) + h2 * " + AH),
+    #  ★切线项符号经实测映射(cid=54835 反推 dSD=-vcosθ,dLT=-vsinθ)数值定为 **AH − atan2(...)**（+ 版会外扩发散）
+    ("hCmd", "h0 * " + AB + " + h1 * (" + AH + " - atan2(0 - (" + AS + " - 4850), 0 - (" + AL + " + 200))) + h2 * " + AH),
     # 盘旋需要更大坡度权限才能绕住 R=200m（数值：30°坡→半径发散 332→741；≥45°→有界）；普通横向仍回退 bankTrk(±30)
     ("bankApp", "(PH > 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk"),
 ]

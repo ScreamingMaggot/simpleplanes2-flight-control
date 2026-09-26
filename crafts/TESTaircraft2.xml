@@ -563,7 +563,7 @@
     <Setter variable="h0" function="clamp01(PH &lt; 0.5)" priority="0" />
     <Setter variable="h1" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))" priority="0" />
     <Setter variable="h2" function="clamp01(PH &gt; 1.5)" priority="0" />
-    <Setter variable="hCmd" function="h0 * AB12 + h1 * (AH12 + atan2(0 - (AS12 - 4850), 0 - (AL12 + 200))) + h2 * AH12" priority="0" />
+    <Setter variable="hCmd" function="h0 * AB12 + h1 * (AH12 - atan2(0 - (AS12 - 4850), 0 - (AL12 + 200))) + h2 * AH12" priority="0" />
     <Setter variable="bankApp" function="(PH &gt; 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk" priority="0" />
     <Setter variable="altTgt" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5)) * (Altitude - 400) + (1 - clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))) * min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? TLA : 9999999)" priority="0" />
     <Setter variable="vsLine" function="0.25 * (altTgt - Altitude) + (((SD &gt; 0) &amp; (SD &lt; 15000)) ? 0.0524 * clamp(rate(SD), -160, 160) : 0)" priority="0" />
