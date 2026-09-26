@@ -9,6 +9,12 @@
 
 
 
+
+
+
+
+
+
 -- ==== 面板镜像（自动生成：ft_mirror_gen.py）====
 local _ftmirror = (function()
 --[[ ==========================================================================
@@ -660,6 +666,8 @@ function initialize()
 	_appr_hdr()
 	_appr_hdr()
 	_appr_hdr()
+	_appr_hdr()
+	_appr_hdr()
 end
 
 -- ==== FT-ONLY 编译开关（2026-09-25，用户裁定）================================
@@ -762,6 +770,10 @@ function update()
 			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
 		
 		_appr_log()
+
+_appr_log()
+
+_appr_log()
 
 _appr_log()
 

@@ -100,8 +100,20 @@ def write_stream(streams, cols, out, tag):
     return files, samples
 
 
+def _stamp_from_log():
+    """用日志的 mtime 做输出后缀，避免覆盖上一次的解析结果。
+
+    为什么加：默认输出名固定（telemetry.csv），每解析一次就把上一局的结果**静默覆盖**。
+    analysis/data/ 里已经有 telemetry2..36 这种人工改名的历史 —— 说明这个坑一直在用人工绕过。
+    """
+    import time as _t
+    return _t.strftime("%m%d-%H%M", _t.localtime(os.path.getmtime(LOG)))
+
+
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "telemetry.csv"
+    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
+    explicit = bool(argv)
+    out = argv[0] if argv else "telemetry.csv"
     if not os.path.isabs(out):
         out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", out)
     if not os.path.exists(LOG):
@@ -114,6 +126,11 @@ def main():
         sys.exit("Player.log 里既没有 TEL 也没有 APPR 行——先确认 MFD 补丁已 apply "
                  "且飞机装了 MFD-1 零件（APPR 还要求 addon 已用 build_mirror_addon.py "
                  "--inplace 带镜像）")
+    # 未显式指定输出名、且目标已存在 ⇒ 自动加 ".<日志时间戳>" 后缀（不覆盖历史）
+    if not explicit and os.path.exists(out):
+        stem, ext = os.path.splitext(out)
+        out = f"{stem}.{_stamp_from_log()}{ext}"
+        print(f"（默认名已被占用，改写到 {os.path.basename(out)}，不覆盖历史）")
     if tel:
         write_stream(tel, TEL_COLS, out, "")
     else:
