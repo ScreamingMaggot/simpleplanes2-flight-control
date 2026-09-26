@@ -419,10 +419,152 @@
     <Setter variable="Rturn" function="GS * GS / 5.66" priority="0" />
     <Setter variable="LEAD" function="clamp(atan(xtrk / max(400, Rturn)), -45, 45)" priority="0" />
     <Setter variable="bankTrk" function="-clamp(trkEr + LEAD, -30, 30)" priority="0" />
-    <Setter variable="altTgt" function="min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? TLA : 9999999)" priority="0" />
     <Setter variable="tanG" function="clamp(GS * 0.12, 3, 7) / max(GS, 5)" priority="0" />
     <Setter variable="fldE" function="TLA - 0.0524 * max(SD, 0)" priority="0" />
     <Setter variable="htExcess" function="(SD &lt; 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0" priority="0" />
+    <Setter variable="NB0" function="((DS0 &lt; 12000) &amp; (DS0 &lt; 99999999))" priority="0" />
+    <Setter variable="NDS0" function="(NB0 ? DS0 : 99999999)" priority="0" />
+    <Setter variable="NNX0" function="(NB0 ? 0 : -1)" priority="0" />
+    <Setter variable="NB1" function="((DS1 &lt; 12000) &amp; (DS1 &lt; NDS0))" priority="0" />
+    <Setter variable="NDS1" function="(NB1 ? DS1 : NDS0)" priority="0" />
+    <Setter variable="NNX1" function="(NB1 ? 1 : NNX0)" priority="0" />
+    <Setter variable="NB2" function="((DS2 &lt; 12000) &amp; (DS2 &lt; NDS1))" priority="0" />
+    <Setter variable="NDS2" function="(NB2 ? DS2 : NDS1)" priority="0" />
+    <Setter variable="NNX2" function="(NB2 ? 2 : NNX1)" priority="0" />
+    <Setter variable="NB3" function="((DS3 &lt; 12000) &amp; (DS3 &lt; NDS2))" priority="0" />
+    <Setter variable="NDS3" function="(NB3 ? DS3 : NDS2)" priority="0" />
+    <Setter variable="NNX3" function="(NB3 ? 3 : NNX2)" priority="0" />
+    <Setter variable="NB4" function="((DS4 &lt; 12000) &amp; (DS4 &lt; NDS3))" priority="0" />
+    <Setter variable="NDS4" function="(NB4 ? DS4 : NDS3)" priority="0" />
+    <Setter variable="NNX4" function="(NB4 ? 4 : NNX3)" priority="0" />
+    <Setter variable="NB5" function="((DS5 &lt; 12000) &amp; (DS5 &lt; NDS4))" priority="0" />
+    <Setter variable="NDS5" function="(NB5 ? DS5 : NDS4)" priority="0" />
+    <Setter variable="NNX5" function="(NB5 ? 5 : NNX4)" priority="0" />
+    <Setter variable="NB6" function="((DS6 &lt; 12000) &amp; (DS6 &lt; NDS5))" priority="0" />
+    <Setter variable="NDS6" function="(NB6 ? DS6 : NDS5)" priority="0" />
+    <Setter variable="NNX6" function="(NB6 ? 6 : NNX5)" priority="0" />
+    <Setter variable="NB7" function="((DS7 &lt; 12000) &amp; (DS7 &lt; NDS6))" priority="0" />
+    <Setter variable="NDS7" function="(NB7 ? DS7 : NDS6)" priority="0" />
+    <Setter variable="NNX7" function="(NB7 ? 7 : NNX6)" priority="0" />
+    <Setter variable="NB8" function="((DS8 &lt; 12000) &amp; (DS8 &lt; NDS7))" priority="0" />
+    <Setter variable="NDS8" function="(NB8 ? DS8 : NDS7)" priority="0" />
+    <Setter variable="NNX8" function="(NB8 ? 8 : NNX7)" priority="0" />
+    <Setter variable="NB9" function="((DS9 &lt; 12000) &amp; (DS9 &lt; NDS8))" priority="0" />
+    <Setter variable="NDS9" function="(NB9 ? DS9 : NDS8)" priority="0" />
+    <Setter variable="NNX9" function="(NB9 ? 9 : NNX8)" priority="0" />
+    <Setter variable="NB10" function="((DS10 &lt; 12000) &amp; (DS10 &lt; NDS9))" priority="0" />
+    <Setter variable="NDS10" function="(NB10 ? DS10 : NDS9)" priority="0" />
+    <Setter variable="NNX10" function="(NB10 ? 10 : NNX9)" priority="0" />
+    <Setter variable="NB11" function="((DS11 &lt; 12000) &amp; (DS11 &lt; NDS10))" priority="0" />
+    <Setter variable="NDS11" function="(NB11 ? DS11 : NDS10)" priority="0" />
+    <Setter variable="NNX11" function="(NB11 ? 11 : NNX10)" priority="0" />
+    <Setter variable="NB12" function="((DS12 &lt; 12000) &amp; (DS12 &lt; NDS11))" priority="0" />
+    <Setter variable="NDS12" function="(NB12 ? DS12 : NDS11)" priority="0" />
+    <Setter variable="NNX12" function="(NB12 ? 12 : NNX11)" priority="0" />
+    <Setter variable="AN0" function="(abs(NNX12 - 0) &lt; 0.5)" priority="0" />
+    <Setter variable="AS0" function="(AN0 ? SD0 : 9999999)" priority="0" />
+    <Setter variable="AL0" function="(AN0 ? LT0 : -9999999)" priority="0" />
+    <Setter variable="AT0" function="(AN0 ? 10 + 0.0524 * max(SD0, 0) : 9999999)" priority="0" />
+    <Setter variable="AB0" function="(AN0 ? BG0 : -9999999)" priority="0" />
+    <Setter variable="AH0" function="(AN0 ? 10 : 0)" priority="0" />
+    <Setter variable="AU0" function="(AN0 ? 1 : 0)" priority="0" />
+    <Setter variable="AN1" function="(abs(NNX12 - 1) &lt; 0.5)" priority="0" />
+    <Setter variable="AS1" function="(AN1 ? SD1 : AS0)" priority="0" />
+    <Setter variable="AL1" function="(AN1 ? LT1 : AL0)" priority="0" />
+    <Setter variable="AT1" function="(AN1 ? 10 + 0.0524 * max(SD1, 0) : AT0)" priority="0" />
+    <Setter variable="AB1" function="(AN1 ? BG1 : AB0)" priority="0" />
+    <Setter variable="AH1" function="(AN1 ? 40 : AH0)" priority="0" />
+    <Setter variable="AU1" function="(AN1 ? 1 : AU0)" priority="0" />
+    <Setter variable="AN2" function="(abs(NNX12 - 2) &lt; 0.5)" priority="0" />
+    <Setter variable="AS2" function="(AN2 ? SD2 : AS1)" priority="0" />
+    <Setter variable="AL2" function="(AN2 ? LT2 : AL1)" priority="0" />
+    <Setter variable="AT2" function="(AN2 ? 10 + 0.0524 * max(SD2, 0) : AT1)" priority="0" />
+    <Setter variable="AB2" function="(AN2 ? BG2 : AB1)" priority="0" />
+    <Setter variable="AH2" function="(AN2 ? 190 : AH1)" priority="0" />
+    <Setter variable="AU2" function="(AN2 ? 1 : AU1)" priority="0" />
+    <Setter variable="AN3" function="(abs(NNX12 - 3) &lt; 0.5)" priority="0" />
+    <Setter variable="AS3" function="(AN3 ? SD3 : AS2)" priority="0" />
+    <Setter variable="AL3" function="(AN3 ? LT3 : AL2)" priority="0" />
+    <Setter variable="AT3" function="(AN3 ? 10 + 0.0524 * max(SD3, 0) : AT2)" priority="0" />
+    <Setter variable="AB3" function="(AN3 ? BG3 : AB2)" priority="0" />
+    <Setter variable="AH3" function="(AN3 ? 220 : AH2)" priority="0" />
+    <Setter variable="AU3" function="(AN3 ? 1 : AU2)" priority="0" />
+    <Setter variable="AN4" function="(abs(NNX12 - 4) &lt; 0.5)" priority="0" />
+    <Setter variable="AS4" function="(AN4 ? SD4 : AS3)" priority="0" />
+    <Setter variable="AL4" function="(AN4 ? LT4 : AL3)" priority="0" />
+    <Setter variable="AT4" function="(AN4 ? 5 + 0.0524 * max(SD4, 0) : AT3)" priority="0" />
+    <Setter variable="AB4" function="(AN4 ? BG4 : AB3)" priority="0" />
+    <Setter variable="AH4" function="(AN4 ? 50 : AH3)" priority="0" />
+    <Setter variable="AU4" function="(AN4 ? 1 : AU3)" priority="0" />
+    <Setter variable="AN5" function="(abs(NNX12 - 5) &lt; 0.5)" priority="0" />
+    <Setter variable="AS5" function="(AN5 ? SD5 : AS4)" priority="0" />
+    <Setter variable="AL5" function="(AN5 ? LT5 : AL4)" priority="0" />
+    <Setter variable="AT5" function="(AN5 ? 5 + 0.0524 * max(SD5, 0) : AT4)" priority="0" />
+    <Setter variable="AB5" function="(AN5 ? BG5 : AB4)" priority="0" />
+    <Setter variable="AH5" function="(AN5 ? 230 : AH4)" priority="0" />
+    <Setter variable="AU5" function="(AN5 ? 1 : AU4)" priority="0" />
+    <Setter variable="AN6" function="(abs(NNX12 - 6) &lt; 0.5)" priority="0" />
+    <Setter variable="AS6" function="(AN6 ? SD6 : AS5)" priority="0" />
+    <Setter variable="AL6" function="(AN6 ? LT6 : AL5)" priority="0" />
+    <Setter variable="AT6" function="(AN6 ? 5 + 0.0524 * max(SD6, 0) : AT5)" priority="0" />
+    <Setter variable="AB6" function="(AN6 ? BG6 : AB5)" priority="0" />
+    <Setter variable="AH6" function="(AN6 ? 80 : AH5)" priority="0" />
+    <Setter variable="AU6" function="(AN6 ? 1 : AU5)" priority="0" />
+    <Setter variable="AN7" function="(abs(NNX12 - 7) &lt; 0.5)" priority="0" />
+    <Setter variable="AS7" function="(AN7 ? SD7 : AS6)" priority="0" />
+    <Setter variable="AL7" function="(AN7 ? LT7 : AL6)" priority="0" />
+    <Setter variable="AT7" function="(AN7 ? 5 + 0.0524 * max(SD7, 0) : AT6)" priority="0" />
+    <Setter variable="AB7" function="(AN7 ? BG7 : AB6)" priority="0" />
+    <Setter variable="AH7" function="(AN7 ? 260 : AH6)" priority="0" />
+    <Setter variable="AU7" function="(AN7 ? 1 : AU6)" priority="0" />
+    <Setter variable="AN8" function="(abs(NNX12 - 8) &lt; 0.5)" priority="0" />
+    <Setter variable="AS8" function="(AN8 ? SD8 : AS7)" priority="0" />
+    <Setter variable="AL8" function="(AN8 ? LT8 : AL7)" priority="0" />
+    <Setter variable="AT8" function="(AN8 ? 3 + 0.0524 * max(SD8, 0) : AT7)" priority="0" />
+    <Setter variable="AB8" function="(AN8 ? BG8 : AB7)" priority="0" />
+    <Setter variable="AH8" function="(AN8 ? 45 : AH7)" priority="0" />
+    <Setter variable="AU8" function="(AN8 ? 1 : AU7)" priority="0" />
+    <Setter variable="AN9" function="(abs(NNX12 - 9) &lt; 0.5)" priority="0" />
+    <Setter variable="AS9" function="(AN9 ? SD9 : AS8)" priority="0" />
+    <Setter variable="AL9" function="(AN9 ? LT9 : AL8)" priority="0" />
+    <Setter variable="AT9" function="(AN9 ? 3 + 0.0524 * max(SD9, 0) : AT8)" priority="0" />
+    <Setter variable="AB9" function="(AN9 ? BG9 : AB8)" priority="0" />
+    <Setter variable="AH9" function="(AN9 ? 225 : AH8)" priority="0" />
+    <Setter variable="AU9" function="(AN9 ? 1 : AU8)" priority="0" />
+    <Setter variable="AN10" function="(abs(NNX12 - 10) &lt; 0.5)" priority="0" />
+    <Setter variable="AS10" function="(AN10 ? SD10 : AS9)" priority="0" />
+    <Setter variable="AL10" function="(AN10 ? LT10 : AL9)" priority="0" />
+    <Setter variable="AT10" function="(AN10 ? 3 + 0.0524 * max(SD10, 0) : AT9)" priority="0" />
+    <Setter variable="AB10" function="(AN10 ? BG10 : AB9)" priority="0" />
+    <Setter variable="AH10" function="(AN10 ? 180 : AH9)" priority="0" />
+    <Setter variable="AU10" function="(AN10 ? 1 : AU9)" priority="0" />
+    <Setter variable="AN11" function="(abs(NNX12 - 11) &lt; 0.5)" priority="0" />
+    <Setter variable="AS11" function="(AN11 ? SD11 : AS10)" priority="0" />
+    <Setter variable="AL11" function="(AN11 ? LT11 : AL10)" priority="0" />
+    <Setter variable="AT11" function="(AN11 ? 10 + 0.0524 * max(SD11, 0) : AT10)" priority="0" />
+    <Setter variable="AB11" function="(AN11 ? BG11 : AB10)" priority="0" />
+    <Setter variable="AH11" function="(AN11 ? 345 : AH10)" priority="0" />
+    <Setter variable="AU11" function="(AN11 ? 1 : AU10)" priority="0" />
+    <Setter variable="AN12" function="(abs(NNX12 - 12) &lt; 0.5)" priority="0" />
+    <Setter variable="AS12" function="(AN12 ? SD12 : AS11)" priority="0" />
+    <Setter variable="AL12" function="(AN12 ? LT12 : AL11)" priority="0" />
+    <Setter variable="AT12" function="(AN12 ? 10 + 0.0524 * max(SD12, 0) : AT11)" priority="0" />
+    <Setter variable="AB12" function="(AN12 ? BG12 : AB11)" priority="0" />
+    <Setter variable="AH12" function="(AN12 ? 225 : AH11)" priority="0" />
+    <Setter variable="AU12" function="(AN12 ? 1 : AU11)" priority="0" />
+    <Setter variable="Ael" function="AT12 - 0.0524 * max(AS12, 0)" priority="0" />
+    <Setter variable="Aexc" function="max(0, (Altitude - Ael) - AS12 * tanG)" priority="0" />
+    <Setter variable="PAn" function="clamp01((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3) &amp; (AU12 &gt; 0.5))" priority="0" />
+    <Setter variable="PNn" function="clamp01(AS12 &lt;= 4850)" priority="0" />
+    <Setter variable="PTn" function="clamp01(Aexc &gt; 100)" priority="0" />
+    <Setter variable="PFn" function="clamp01((Altitude &lt;= AT12 + 100) &amp; (abs(AL12) &lt; 150) &amp; (abs(deltaangle(Heading, AH12)) &lt; 25))" priority="0" />
+    <Setter variable="PH" function="PAn * PNn * (1 + clamp01((PFn + clamp01(PH &gt; 1.5) + (1 - PTn)) &gt; 0.5))" priority="0" />
+    <Setter variable="h0" function="clamp01(PH &lt; 0.5)" priority="0" />
+    <Setter variable="h1" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))" priority="0" />
+    <Setter variable="h2" function="clamp01(PH &gt; 1.5)" priority="0" />
+    <Setter variable="hCmd" function="h0 * AB12 + h1 * (AH12 + atan2(0 - (AS12 - 4850), 0 - (AL12 + 200))) + h2 * AH12" priority="0" />
+    <Setter variable="bankApp" function="(PH &gt; 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -30, 30)) : bankTrk" priority="0" />
+    <Setter variable="altTgt" function="min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? (clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5)) * (Altitude - 400) + (1 - clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))) * TLA) : 9999999)" priority="0" />
     <Setter variable="vsLine" function="0.25 * (altTgt - Altitude) + (((SD &gt; 0) &amp; (SD &lt; 15000)) ? 0.0524 * clamp(rate(SD), -160, 160) : 0)" priority="0" />
     <Setter variable="vsCmd" function="clamp((AltitudeAgl &lt; 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))" priority="0" />
     <Setter variable="vsErr" function="vsCmd - vs" priority="0" />
@@ -435,7 +577,7 @@
     <Setter variable="cmdTheF" function="min(cmdTheF_P + hold * airb * cmdTheF_I, (IAS &lt; 45 ? 8 : 90))" priority="0" />
     <Setter variable="cmdThe" function="min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (0 - vs - 1.5), 0, 8)), (IAS &lt; 45 ? 8 : 90))" priority="0" />
     <Setter variable="phiCmdF" function="cmdPhi" priority="0" />
-    <Setter variable="phiCmd" function="cmdPhi + hold * airb * bankTrk" priority="0" />
+    <Setter variable="phiCmd" function="cmdPhi + hold * airb * bankApp" priority="0" />
     <Setter variable="VAPP" function="55" priority="0" />
     <Setter variable="airFly" function="((airEver &gt; 0.5) &amp; (AltitudeAgl &gt;= 3) &amp; (SD &lt; 15000)) ? 1 : 0" priority="0" />
     <Setter variable="gndIdle" function="((airEver &gt; 0.5) &amp; (AltitudeAgl &lt; 3) &amp; (SD &lt; 15000)) ? 1 : 0" priority="0" />

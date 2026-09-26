@@ -186,15 +186,49 @@ PANEL += [
     #   用户反问"没开 7 怎么会被当成着陆"——对。核代码：`Activate7` 关时 ELE 用 `cmdTheF`，
     #   而 cmdTheF* 只用 `vsErrH/altTgtH`（旋钮），`altTgt/TLA/拉平` 一个都不进 8 层通路 ⇒ **7/8 未耦合**。
     #   所以那个归因只对"7 挂着起飞"成立；本例 7 关 ⇒ 病在 **8 层环自身**，见 cmdTheF_I 处（积分饱和）。
-    ("altTgt", "min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? TLA : 9999999)"),
-    # M4 只读第一步——"能否在最大下滑角内接住"的余量（米）：>0 = 现有五边接不住（太高/距离不够），需消高盘旋。
-    #   可下滑最陡正切 tanG = sinkMax/GS（与 vsCmd 下沉预算同式）；场高 el = TLA − 0.0524·max(SD,0)；
-    #   沿 γmax 从当前高度到入口能落到的地板 = el + SD·tanG ⇒ htExcess = 高出该地板多少。走廊外=0。
     ("tanG",     "clamp(GS * 0.12, 3, 7) / max(GS, 5)"),
     ("fldE",     "TLA - 0.0524 * max(SD, 0)"),
     ("htExcess", "(SD < 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0"),
-    # （M4 盘旋消高 ORB 已按用户 2026-09-26 指示**摘除**：四刀未过、根因是识别太窄；改走 A=离线整体重做，
-    #   见 ledger「M3+M4 合并定案」。此处曾放 ORB/bankUse，等 FT 四态做好再整体上。）
+]
+# ── M3+M4 四态（方案 A，用户定）：**点目标识别** + ENROUTE 缓飞朝场 + 盘旋(绕 FAF 切线圆) + FINAL ──
+#   识别不再要求"已在中线走廊里"（那是高/远/斜切时 O0 飞走的根）。相位 PH 自参照：0=ENROUTE 1=ORBIT 2=FINAL。
+_pBD, _pNI = "99999999", "-1"
+for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
+    PANEL.append(("NB%d" % _i, "((DS%d < 12000) & (DS%d < %s))" % (_i, _i, _pBD)))
+    PANEL.append(("NDS%d" % _i, "(NB%d ? DS%d : %s)" % (_i, _i, _pBD)))
+    PANEL.append(("NNX%d" % _i, "(NB%d ? %d : %s)" % (_i, _i, _pNI)))
+    _pBD, _pNI = "NDS%d" % _i, "NNX%d" % _i
+_NT = _pNI                                                     # 最近跑道序号（到入口<12km）
+_prevA = ("9999999", "-9999999", "9999999", "-9999999", "0", "0")   # AS,AL,AT,AB,AH,AU
+for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
+    _aS, _aL, _aT, _aB, _aH, _aU = _prevA
+    PANEL.append(("AN%d" % _i, "(abs(%s - %d) < 0.5)" % (_NT, _i)))
+    PANEL.append(("AS%d" % _i, "(AN%d ? SD%d : %s)" % (_i, _i, _aS)))
+    PANEL.append(("AL%d" % _i, "(AN%d ? LT%d : %s)" % (_i, _i, _aL)))
+    PANEL.append(("AT%d" % _i, "(AN%d ? %d + 0.0524 * max(SD%d, 0) : %s)" % (_i, _el, _i, _aT)))
+    PANEL.append(("AB%d" % _i, "(AN%d ? BG%d : %s)" % (_i, _i, _aB)))
+    PANEL.append(("AH%d" % _i, "(AN%d ? %d : %s)" % (_i, _hdg, _aH)))
+    PANEL.append(("AU%d" % _i, "(AN%d ? 1 : %s)" % (_i, _aU)))
+    _prevA = ("AS%d" % _i, "AL%d" % _i, "AT%d" % _i, "AB%d" % _i, "AH%d" % _i, "AU%d" % _i)
+AS, AL, AT, AB, AH, AU = _prevA
+PANEL += [
+    ("Ael",  AT + " - 0.0524 * max(" + AS + ", 0)"),                          # 目标场高
+    ("Aexc", "max(0, (Altitude - Ael) - " + AS + " * tanG)"),                 # 目标"太高"余量
+    ("PAn",  "clamp01((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3) & (" + AU + " > 0.5))"),
+    ("PNn",  "clamp01(" + AS + " <= 4850)"),                                  # 已到 FAF 区
+    ("PTn",  "clamp01(Aexc > 100)"),                                          # 太高
+    ("PFn",  "clamp01((Altitude <= " + AT + " + 100) & (abs(" + AL + ") < 150) & (abs(deltaangle(Heading, " + AH + ")) < 25))"),
+    # PH：未 armed/未到 → 0；到 FAF 区：太高→1(ORBIT)，否则→2(FINAL)；已 FINAL 保持
+    ("PH",   "PAn * PNn * (1 + clamp01((PFn + clamp01(PH > 1.5) + (1 - PTn)) > 0.5))"),
+    ("h0",   "clamp01(PH < 0.5)"),
+    ("h1",   "clamp01((PH > 0.5) & (PH < 1.5))"),
+    ("h2",   "clamp01(PH > 1.5)"),
+    # 横向目标航向（算术选路，无嵌套三元）：ENROUTE=朝入口 AB；ORBIT=绕 FAF(4850,0)、圆心在右(LT=-200)的切线；FINAL=跑道航向 AH
+    ("hCmd", "h0 * " + AB + " + h1 * (" + AH + " + atan2(0 - (" + AS + " - 4850), 0 - (" + AL + " + 200))) + h2 * " + AH),
+    ("bankApp", "(PH > 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -30, 30)) : bankTrk"),
+]
+PANEL += [
+    ("altTgt", "min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? (clamp01((PH > 0.5) & (PH < 1.5)) * (Altitude - 400) + (1 - clamp01((PH > 0.5) & (PH < 1.5))) * TLA) : 9999999)"),
     # 道线自身以 0.0524·GS 下沉（85 m/s 时 4.5 m/s）⇒ 纯 P 追斜坡的稳态误差=斜率/增益=18 m
     # （app30 实测 +16~+18 m 恒定滞后，与 SC-5 当年同案）⇒ 补上前馈项。
     # v1.6：前馈**只对斜坡段有效**（`SD > 0`）——过阈值后道线是平的（`max(SD,0)`），
@@ -296,7 +330,7 @@ PANEL += [
     #   （同族两次前科：`vs<0` 门、app88 跑道跳——**硬阈值=抖振源**；此处连根换成连续量。）
     ("cmdThe",  "min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (0 - vs - 1.5), 0, 8)), (IAS < 45 ? 8 : 90))"),
     ("phiCmdF", "cmdPhi"),
-    ("phiCmd",  "cmdPhi + hold * airb * bankTrk"),
+    ("phiCmd",  "cmdPhi + hold * airb * bankApp"),   # 四态(7域)=bankApp；否则=bankTrk（bankApp 内含回退）
     # ── v2.0 能量环（用户 2026-09-25 深夜授权"油门 + 空中减速板都给你，但这俩不能打架"）──────
     # 打架的解法不是"协调"，是**在空速轴上分区、互斥、留死区**（SC-3b v4.8 同族教训）：
     #   IAS < VAPP        → 油门加（减速板缴械，因它门在 VAPP+12 之上）
@@ -619,7 +653,7 @@ NumberToBool PID pow rate repeat round sign sin smooth sqrt sum tan""".split())
 # 显式放行的自参照 setter（2026-09-26 v2.17）：唯一合法用途 = 给 sum() 积分器加"退绕/清零"支，
 # 即 `sum(gate ? err : -self*k)` —— FT 没有内置抗饱和，自参照是"把积分按时间常数拉回 0"的唯一写法。
 # 除这个白名单外，自参照一律仍当错误（防手滑写出无定义的环）。
-ALLOW_SELFREF = {"cmdTheF_I", "SLK"}
+ALLOW_SELFREF = {"cmdTheF_I", "SLK", "PH"}
 def check_refs(setters):
     defined = []
     for name, expr in setters:
