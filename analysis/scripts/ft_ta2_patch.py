@@ -199,10 +199,13 @@ for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
     PANEL.append(("NNX%d" % _i, "(NB%d ? %d : %s)" % (_i, _i, _pNI)))
     _pBD, _pNI = "NDS%d" % _i, "NNX%d" % _i
 _NT = _pNI                                                     # 最近跑道序号（到入口<12km）
+# ★NTL：**锁定所捕获的跑道**（用户定"未完成着陆前不改捕捉到的跑道"）——armed(7&离地) 首帧锁 NT、之后攥住；松7/接地清 -1
+PANEL.append(("NTL", "(((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3))"
+                     " ? (NTL + (1 - (NTL > -0.5)) * (" + _NT + " - NTL)) : (-1))"))
 _prevA = ("9999999", "-9999999", "9999999", "-9999999", "0", "0")   # AS,AL,AT,AB,AH,AU
 for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
     _aS, _aL, _aT, _aB, _aH, _aU = _prevA
-    PANEL.append(("AN%d" % _i, "(abs(%s - %d) < 0.5)" % (_NT, _i)))
+    PANEL.append(("AN%d" % _i, "(abs(NTL - %d) < 0.5)" % _i))
     PANEL.append(("AS%d" % _i, "(AN%d ? SD%d : %s)" % (_i, _i, _aS)))
     PANEL.append(("AL%d" % _i, "(AN%d ? LT%d : %s)" % (_i, _i, _aL)))
     PANEL.append(("AT%d" % _i, "(AN%d ? %d + 0.0524 * max(SD%d, 0) : %s)" % (_i, _el, _i, _aT)))
@@ -576,7 +579,7 @@ TXT_LIST = [
     "HDG{round(Heading)} TRK{round(trkUse)}",
     # 39：到选中跑道入口的距离(km) + 横偏(m)（长飞末段接管用）
     # 39：到选中跑道入口的距离(km) + 横偏(m) + **选场态**（Ok=有候选 / P=指向优先命中，验 M1 两级制）
-    "D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)} E{round(htExcess)}",
+    "D{round(AS / 1000)}k L{round(AL)} E{round(Aexc)} T{round(NTL)}",
     # 40：风的反演——侧风/顺逆风（IAS·sin/cos 蟹角 − GS），落地可落地性判据
     "XW{round(XW)} HW{round(HW)}",
     # 41：油量% + **实际发动机油门 thrNow**（进 7=自动油门值，否则=油门杆）——真值，非杆位
@@ -653,7 +656,7 @@ NumberToBool PID pow rate repeat round sign sin smooth sqrt sum tan""".split())
 # 显式放行的自参照 setter（2026-09-26 v2.17）：唯一合法用途 = 给 sum() 积分器加"退绕/清零"支，
 # 即 `sum(gate ? err : -self*k)` —— FT 没有内置抗饱和，自参照是"把积分按时间常数拉回 0"的唯一写法。
 # 除这个白名单外，自参照一律仍当错误（防手滑写出无定义的环）。
-ALLOW_SELFREF = {"cmdTheF_I", "SLK", "ORB"}
+ALLOW_SELFREF = {"cmdTheF_I", "SLK", "ORB", "NTL"}
 def check_refs(setters):
     defined = []
     for name, expr in setters:

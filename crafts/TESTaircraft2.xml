@@ -461,91 +461,92 @@
     <Setter variable="NB12" function="((DS12 &lt; 12000) &amp; (DS12 &lt; NDS11))" priority="0" />
     <Setter variable="NDS12" function="(NB12 ? DS12 : NDS11)" priority="0" />
     <Setter variable="NNX12" function="(NB12 ? 12 : NNX11)" priority="0" />
-    <Setter variable="AN0" function="(abs(NNX12 - 0) &lt; 0.5)" priority="0" />
+    <Setter variable="NTL" function="(((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3)) ? (NTL + (1 - (NTL &gt; -0.5)) * (NNX12 - NTL)) : (-1))" priority="0" />
+    <Setter variable="AN0" function="(abs(NTL - 0) &lt; 0.5)" priority="0" />
     <Setter variable="AS0" function="(AN0 ? SD0 : 9999999)" priority="0" />
     <Setter variable="AL0" function="(AN0 ? LT0 : -9999999)" priority="0" />
     <Setter variable="AT0" function="(AN0 ? 10 + 0.0524 * max(SD0, 0) : 9999999)" priority="0" />
     <Setter variable="AB0" function="(AN0 ? BG0 : -9999999)" priority="0" />
     <Setter variable="AH0" function="(AN0 ? 10 : 0)" priority="0" />
     <Setter variable="AU0" function="(AN0 ? 1 : 0)" priority="0" />
-    <Setter variable="AN1" function="(abs(NNX12 - 1) &lt; 0.5)" priority="0" />
+    <Setter variable="AN1" function="(abs(NTL - 1) &lt; 0.5)" priority="0" />
     <Setter variable="AS1" function="(AN1 ? SD1 : AS0)" priority="0" />
     <Setter variable="AL1" function="(AN1 ? LT1 : AL0)" priority="0" />
     <Setter variable="AT1" function="(AN1 ? 10 + 0.0524 * max(SD1, 0) : AT0)" priority="0" />
     <Setter variable="AB1" function="(AN1 ? BG1 : AB0)" priority="0" />
     <Setter variable="AH1" function="(AN1 ? 40 : AH0)" priority="0" />
     <Setter variable="AU1" function="(AN1 ? 1 : AU0)" priority="0" />
-    <Setter variable="AN2" function="(abs(NNX12 - 2) &lt; 0.5)" priority="0" />
+    <Setter variable="AN2" function="(abs(NTL - 2) &lt; 0.5)" priority="0" />
     <Setter variable="AS2" function="(AN2 ? SD2 : AS1)" priority="0" />
     <Setter variable="AL2" function="(AN2 ? LT2 : AL1)" priority="0" />
     <Setter variable="AT2" function="(AN2 ? 10 + 0.0524 * max(SD2, 0) : AT1)" priority="0" />
     <Setter variable="AB2" function="(AN2 ? BG2 : AB1)" priority="0" />
     <Setter variable="AH2" function="(AN2 ? 190 : AH1)" priority="0" />
     <Setter variable="AU2" function="(AN2 ? 1 : AU1)" priority="0" />
-    <Setter variable="AN3" function="(abs(NNX12 - 3) &lt; 0.5)" priority="0" />
+    <Setter variable="AN3" function="(abs(NTL - 3) &lt; 0.5)" priority="0" />
     <Setter variable="AS3" function="(AN3 ? SD3 : AS2)" priority="0" />
     <Setter variable="AL3" function="(AN3 ? LT3 : AL2)" priority="0" />
     <Setter variable="AT3" function="(AN3 ? 10 + 0.0524 * max(SD3, 0) : AT2)" priority="0" />
     <Setter variable="AB3" function="(AN3 ? BG3 : AB2)" priority="0" />
     <Setter variable="AH3" function="(AN3 ? 220 : AH2)" priority="0" />
     <Setter variable="AU3" function="(AN3 ? 1 : AU2)" priority="0" />
-    <Setter variable="AN4" function="(abs(NNX12 - 4) &lt; 0.5)" priority="0" />
+    <Setter variable="AN4" function="(abs(NTL - 4) &lt; 0.5)" priority="0" />
     <Setter variable="AS4" function="(AN4 ? SD4 : AS3)" priority="0" />
     <Setter variable="AL4" function="(AN4 ? LT4 : AL3)" priority="0" />
     <Setter variable="AT4" function="(AN4 ? 5 + 0.0524 * max(SD4, 0) : AT3)" priority="0" />
     <Setter variable="AB4" function="(AN4 ? BG4 : AB3)" priority="0" />
     <Setter variable="AH4" function="(AN4 ? 50 : AH3)" priority="0" />
     <Setter variable="AU4" function="(AN4 ? 1 : AU3)" priority="0" />
-    <Setter variable="AN5" function="(abs(NNX12 - 5) &lt; 0.5)" priority="0" />
+    <Setter variable="AN5" function="(abs(NTL - 5) &lt; 0.5)" priority="0" />
     <Setter variable="AS5" function="(AN5 ? SD5 : AS4)" priority="0" />
     <Setter variable="AL5" function="(AN5 ? LT5 : AL4)" priority="0" />
     <Setter variable="AT5" function="(AN5 ? 5 + 0.0524 * max(SD5, 0) : AT4)" priority="0" />
     <Setter variable="AB5" function="(AN5 ? BG5 : AB4)" priority="0" />
     <Setter variable="AH5" function="(AN5 ? 230 : AH4)" priority="0" />
     <Setter variable="AU5" function="(AN5 ? 1 : AU4)" priority="0" />
-    <Setter variable="AN6" function="(abs(NNX12 - 6) &lt; 0.5)" priority="0" />
+    <Setter variable="AN6" function="(abs(NTL - 6) &lt; 0.5)" priority="0" />
     <Setter variable="AS6" function="(AN6 ? SD6 : AS5)" priority="0" />
     <Setter variable="AL6" function="(AN6 ? LT6 : AL5)" priority="0" />
     <Setter variable="AT6" function="(AN6 ? 5 + 0.0524 * max(SD6, 0) : AT5)" priority="0" />
     <Setter variable="AB6" function="(AN6 ? BG6 : AB5)" priority="0" />
     <Setter variable="AH6" function="(AN6 ? 80 : AH5)" priority="0" />
     <Setter variable="AU6" function="(AN6 ? 1 : AU5)" priority="0" />
-    <Setter variable="AN7" function="(abs(NNX12 - 7) &lt; 0.5)" priority="0" />
+    <Setter variable="AN7" function="(abs(NTL - 7) &lt; 0.5)" priority="0" />
     <Setter variable="AS7" function="(AN7 ? SD7 : AS6)" priority="0" />
     <Setter variable="AL7" function="(AN7 ? LT7 : AL6)" priority="0" />
     <Setter variable="AT7" function="(AN7 ? 5 + 0.0524 * max(SD7, 0) : AT6)" priority="0" />
     <Setter variable="AB7" function="(AN7 ? BG7 : AB6)" priority="0" />
     <Setter variable="AH7" function="(AN7 ? 260 : AH6)" priority="0" />
     <Setter variable="AU7" function="(AN7 ? 1 : AU6)" priority="0" />
-    <Setter variable="AN8" function="(abs(NNX12 - 8) &lt; 0.5)" priority="0" />
+    <Setter variable="AN8" function="(abs(NTL - 8) &lt; 0.5)" priority="0" />
     <Setter variable="AS8" function="(AN8 ? SD8 : AS7)" priority="0" />
     <Setter variable="AL8" function="(AN8 ? LT8 : AL7)" priority="0" />
     <Setter variable="AT8" function="(AN8 ? 3 + 0.0524 * max(SD8, 0) : AT7)" priority="0" />
     <Setter variable="AB8" function="(AN8 ? BG8 : AB7)" priority="0" />
     <Setter variable="AH8" function="(AN8 ? 45 : AH7)" priority="0" />
     <Setter variable="AU8" function="(AN8 ? 1 : AU7)" priority="0" />
-    <Setter variable="AN9" function="(abs(NNX12 - 9) &lt; 0.5)" priority="0" />
+    <Setter variable="AN9" function="(abs(NTL - 9) &lt; 0.5)" priority="0" />
     <Setter variable="AS9" function="(AN9 ? SD9 : AS8)" priority="0" />
     <Setter variable="AL9" function="(AN9 ? LT9 : AL8)" priority="0" />
     <Setter variable="AT9" function="(AN9 ? 3 + 0.0524 * max(SD9, 0) : AT8)" priority="0" />
     <Setter variable="AB9" function="(AN9 ? BG9 : AB8)" priority="0" />
     <Setter variable="AH9" function="(AN9 ? 225 : AH8)" priority="0" />
     <Setter variable="AU9" function="(AN9 ? 1 : AU8)" priority="0" />
-    <Setter variable="AN10" function="(abs(NNX12 - 10) &lt; 0.5)" priority="0" />
+    <Setter variable="AN10" function="(abs(NTL - 10) &lt; 0.5)" priority="0" />
     <Setter variable="AS10" function="(AN10 ? SD10 : AS9)" priority="0" />
     <Setter variable="AL10" function="(AN10 ? LT10 : AL9)" priority="0" />
     <Setter variable="AT10" function="(AN10 ? 3 + 0.0524 * max(SD10, 0) : AT9)" priority="0" />
     <Setter variable="AB10" function="(AN10 ? BG10 : AB9)" priority="0" />
     <Setter variable="AH10" function="(AN10 ? 180 : AH9)" priority="0" />
     <Setter variable="AU10" function="(AN10 ? 1 : AU9)" priority="0" />
-    <Setter variable="AN11" function="(abs(NNX12 - 11) &lt; 0.5)" priority="0" />
+    <Setter variable="AN11" function="(abs(NTL - 11) &lt; 0.5)" priority="0" />
     <Setter variable="AS11" function="(AN11 ? SD11 : AS10)" priority="0" />
     <Setter variable="AL11" function="(AN11 ? LT11 : AL10)" priority="0" />
     <Setter variable="AT11" function="(AN11 ? 10 + 0.0524 * max(SD11, 0) : AT10)" priority="0" />
     <Setter variable="AB11" function="(AN11 ? BG11 : AB10)" priority="0" />
     <Setter variable="AH11" function="(AN11 ? 345 : AH10)" priority="0" />
     <Setter variable="AU11" function="(AN11 ? 1 : AU10)" priority="0" />
-    <Setter variable="AN12" function="(abs(NNX12 - 12) &lt; 0.5)" priority="0" />
+    <Setter variable="AN12" function="(abs(NTL - 12) &lt; 0.5)" priority="0" />
     <Setter variable="AS12" function="(AN12 ? SD12 : AS11)" priority="0" />
     <Setter variable="AL12" function="(AN12 ? LT12 : AL11)" priority="0" />
     <Setter variable="AT12" function="(AN12 ? 10 + 0.0524 * max(SD12, 0) : AT11)" priority="0" />
@@ -851,7 +852,7 @@
         <Label.State designText="HDG{round(Heading)} TRK{round(trkUse)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="39" partType="Label-1" position="-0.2155014,3.775085,2.801952" rotation="270,1.366038E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)} E{round(htExcess)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="D{round(AS / 1000)}k L{round(AL)} E{round(Aexc)} T{round(NTL)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="40" partType="Label-1" position="0.224145,3.859498,2.801952" rotation="270,9.757412E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
         <Label.State designText="XW{round(XW)} HW{round(HW)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
