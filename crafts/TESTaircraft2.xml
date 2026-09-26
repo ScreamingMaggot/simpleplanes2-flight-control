@@ -559,7 +559,7 @@
     <Setter variable="PNn" function="clamp01(AS12 &lt;= 4850)" priority="0" />
     <Setter variable="PTn" function="clamp01(Aexc &gt; 100)" priority="0" />
     <Setter variable="PFn" function="clamp01((Altitude &lt;= AT12 + 100) &amp; (abs(AL12) &lt; 150) &amp; (abs(deltaangle(Heading, AH12)) &lt; 25))" priority="0" />
-    <Setter variable="PH" function="PAn * PNn * (1 + clamp01((PFn + clamp01(PH &gt; 1.5) + (1 - PTn)) &gt; 0.5))" priority="0" />
+    <Setter variable="PH" function="PAn * (clamp01(PH &gt; 0.5) + clamp01(PNn) * (1 - clamp01(PH &gt; 0.5))) * (1 + clamp01(PFn + clamp01(PH &gt; 1.5) + (1 - clamp01(PH &gt; 0.5)) * clamp01(PNn) * (1 - PTn)))" priority="0" />
     <Setter variable="h0" function="clamp01(PH &lt; 0.5)" priority="0" />
     <Setter variable="h1" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))" priority="0" />
     <Setter variable="h2" function="clamp01(PH &gt; 1.5)" priority="0" />

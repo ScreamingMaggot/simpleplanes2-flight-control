@@ -220,8 +220,10 @@ PANEL += [
     ("PNn",  "clamp01(" + AS + " <= 4850)"),                                  # 已到 FAF 区
     ("PTn",  "clamp01(Aexc > 100)"),                                          # 太高
     ("PFn",  "clamp01((Altitude <= " + AT + " + 100) & (abs(" + AL + ") < 150) & (abs(deltaangle(Heading, " + AH + ")) < 25))"),
-    # PH：未 armed/未到 → 0；到 FAF 区：太高→1(ORBIT)，否则→2(FINAL)；已 FINAL 保持
-    ("PH",   "PAn * PNn * (1 + clamp01((PFn + clamp01(PH > 1.5) + (1 - PTn)) > 0.5))"),
+    # PH（带迟滞，防绕圈时 AS 越过 4850 掉回 ENROUTE）：0=ENROUTE 1=ORBIT 2=FINAL，armed&未到→0；
+    #   一旦到过 FAF 区就一直 ≥1（`PH>0.5` 或 `PNn`）；到 FAF 那拍：太高→1，否则→2；PFn 或已 FINAL → 保持 2。
+    ("PH",   "PAn * (clamp01(PH > 0.5) + clamp01(PNn) * (1 - clamp01(PH > 0.5)))"
+             " * (1 + clamp01(PFn + clamp01(PH > 1.5) + (1 - clamp01(PH > 0.5)) * clamp01(PNn) * (1 - PTn)))"),
     ("h0",   "clamp01(PH < 0.5)"),
     ("h1",   "clamp01((PH > 0.5) & (PH < 1.5))"),
     ("h2",   "clamp01(PH > 1.5)"),
