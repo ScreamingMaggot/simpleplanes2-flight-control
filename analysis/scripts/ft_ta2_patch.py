@@ -223,12 +223,7 @@ PANEL += [
     #   拉平项(AGL<34)仍走 max(vsLine,−收光)，只在**正在下沉**时生效。
     # 【v2.27 用户定：爬升预算 3→7（对"低于道线爬不回"掉海的修正）】上钳由死 `3` 改成**与下沉对称的
     #   `clamp(GS·0.12, 3, 7)`**（巡航/进近速度下=7 m/s，低速自动收到 3，免低速猛拉机头）；仍只在 7 层通路消费。
-    # 【v2.32 用户实战法：太高就"沿中线大角度直插、快了再拉平"——不绕圈】下沉预算**不对称**：
-    #   高于3°线(altTgt<Altitude) 且离地>100m ⇒ 放开到 ~俯冲角 `clamp(GS·0.5,3,30)`（拿高度换速度）；
-    #   在线/线下(或近地) ⇒ 仍紧钳 `clamp(GS·0.12,3,7)`（防空/防短接）。横向仍咬中线，末段拉平不变。
-    ("abvLine","clamp01((altTgt < Altitude) & (AltitudeAgl > 100))"),
-    ("sinkLo", "abvLine * clamp(GS * 0.5, 3, 30) + (1 - abvLine) * clamp(GS * 0.12, 3, 7)"),
-    ("vsCmd",  "clamp((AltitudeAgl < 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -sinkLo, clamp(GS * 0.12, 3, 7))"),
+    ("vsCmd",  "clamp((AltitudeAgl < 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))"),
     ("vsErr",  "vsCmd - vs"),
     # 近区积分（|vsErr|<4 m/s 才积）：大误差段交给 P+前馈，避免积分攒大风车后顶着不放
     # 【v2.4】旧门 `abs(vsErr) < 4` 是**这场事故的直接原因**：撞水前 vsErr 一路 4.4，刚好卡在门外
@@ -299,10 +294,7 @@ PANEL += [
     #   修：把"按 AGL 硬切"换成**按下沉率的连续防砸地板** `clamp(0.9*(-vs-1.5),0,8)`：
     #   只在**下沉 >1.5 m/s** 时抬机头（防砸），平飞/轻下沉时地板=0 ⇒ 能落地；对 vs 连续 ⇒ 无阈值抖动。
     #   （同族两次前科：`vs<0` 门、app88 跑道跳——**硬阈值=抖振源**；此处连根换成连续量。）
-    # 【v2.34 用户定案：ALT 跟不住 TGT = 升降舵"下沉制动地板"在顶】旧地板 `clamp(0.9·(0−vs−1.5),0,8)`
-    #   是"越沉越抬头"⇒ 把追目标所需的下沉顶住 ⇒ 恒 ~60 m 稳态误差（cid=47708：杆0/pa+0.6/vs−2.9 沿3°线平行悬高）。
-    #   改：地板只在**实际下沉超过指令(vsErr>0)**时制动 ⇒ `clamp(0.9·(vsCmd−vs),0,8)`；要下(vsErr<0)时地板=0，全权限下压。
-    ("cmdThe",  "min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (vsCmd - vs), 0, 8)), (IAS < 45 ? 8 : 90))"),
+    ("cmdThe",  "min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (0 - vs - 1.5), 0, 8)), (IAS < 45 ? 8 : 90))"),
     ("phiCmdF", "cmdPhi"),
     ("phiCmd",  "cmdPhi + hold * airb * bankTrk"),
     # ── v2.0 能量环（用户 2026-09-25 深夜授权"油门 + 空中减速板都给你，但这俩不能打架"）──────

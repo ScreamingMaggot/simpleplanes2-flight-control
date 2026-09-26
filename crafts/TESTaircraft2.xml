@@ -424,9 +424,7 @@
     <Setter variable="fldE" function="TLA - 0.0524 * max(SD, 0)" priority="0" />
     <Setter variable="htExcess" function="(SD &lt; 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0" priority="0" />
     <Setter variable="vsLine" function="0.25 * (altTgt - Altitude) + (((SD &gt; 0) &amp; (SD &lt; 15000)) ? 0.0524 * clamp(rate(SD), -160, 160) : 0)" priority="0" />
-    <Setter variable="abvLine" function="clamp01((altTgt &lt; Altitude) &amp; (AltitudeAgl &gt; 100))" priority="0" />
-    <Setter variable="sinkLo" function="abvLine * clamp(GS * 0.5, 3, 30) + (1 - abvLine) * clamp(GS * 0.12, 3, 7)" priority="0" />
-    <Setter variable="vsCmd" function="clamp((AltitudeAgl &lt; 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -sinkLo, clamp(GS * 0.12, 3, 7))" priority="0" />
+    <Setter variable="vsCmd" function="clamp((AltitudeAgl &lt; 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))" priority="0" />
     <Setter variable="vsErr" function="vsCmd - vs" priority="0" />
     <Setter variable="vsInt" function="clamp(sum((((abs(Roll) &lt; 0.05) &amp; (abs(Pitch) &lt; 0.05)) &amp; (abs(vsErr) &lt; 10)) ? vsErr * 0.35 : 0), -20, 20)" priority="0" />
     <Setter variable="altTgtH" function="VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL" priority="0" />
@@ -435,7 +433,7 @@
     <Setter variable="cmdTheF_P" function="min(-30 * Pitch + hold * airb * (0.8 * vsErrH), (IAS &lt; 45 ? 8 : 90))" priority="0" />
     <Setter variable="cmdTheF_I" function="clamp(sum(((abs(Roll) &lt; 0.05) &amp; (abs(Pitch) &lt; 0.05) &amp; (abs(vsCmdH) &lt; (vsLim - 0.5))) ? vsErrH * 0.35 : (0 - cmdTheF_I * 1.5)), -20, 20)" priority="0" />
     <Setter variable="cmdTheF" function="min(cmdTheF_P + hold * airb * cmdTheF_I, (IAS &lt; 45 ? 8 : 90))" priority="0" />
-    <Setter variable="cmdThe" function="min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (vsCmd - vs), 0, 8)), (IAS &lt; 45 ? 8 : 90))" priority="0" />
+    <Setter variable="cmdThe" function="min(max(-30 * Pitch + hold * airb * (0.8 * vsErr + vsInt), clamp(0.9 * (0 - vs - 1.5), 0, 8)), (IAS &lt; 45 ? 8 : 90))" priority="0" />
     <Setter variable="phiCmdF" function="cmdPhi" priority="0" />
     <Setter variable="phiCmd" function="cmdPhi + hold * airb * bankTrk" priority="0" />
     <Setter variable="VAPP" function="55" priority="0" />
