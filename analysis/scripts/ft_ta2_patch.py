@@ -281,10 +281,11 @@ PANEL += [
     # 而律自己能靠积分把油门顶到需要的位置（有界积分 + 死区 12 m/s 防风车）。
     ("thrErr",  "VAPP - IAS"),
     ("thrInt",  "clamp(sum(((((abs(thrErr) < 12) & (airFly > 0.5)) ? thrErr * 0.03 : 0))), 0, 1)"),
-    # 【v2.27·用户 2026-09-26 "应用 B"：给"低于道线要爬"补能量】自动油门加**道线偏差前馈**——
-    #   低于 3° 线(altTgt>Altitude)才多给油（正项、带上限，免风车）；在线/高于线=0，不干扰正常下滑。
-    ("thrGlide","clamp(0.01 * (altTgt - Altitude), 0, 0.3)"),
-    ("thrPI",   "clamp(0.10 * thrErr + thrInt + thrGlide, 0, 1)"),
+    # 【v2.28·数据定案 2026-09-26】HUD 实证：TGT57m 而 ALT12m、VS 仍 −5.5 ⇒ 律"要爬"机却在沉 ⇒ **指令未达成**；
+    #   病在**自动油门只追空速 VAPP**（速度差≈0 时近乎收光）⇒ 低/沉时没有能量爬回。修=油门加**航径/爬升需求前馈**
+    #   （以 `vsCmd` 为准，只在"要爬(vsCmd>0)"时给油，补推力滞后；满爬升需求≈+0.6 油门）。
+    ("thrPath", "clamp(0.07 * vsCmd, 0, 0.6)"),
+    ("thrPI",   "clamp(0.10 * thrErr + thrInt + thrPath, 0, 1)"),
     # 三段用乘式拼平（不用嵌套三元，未证的语法不赌）：出生未飞=交还油门杆；空中=P 律；接地=0。
     # 【v2.5】`max(Throttle, thrPI)` 被实飞判死：用户五边把杆推到 1.00 ⇒ 律**零权限**，
     # IAS 被拉到 87.4 m/s（313 kph）、接地还有 48.9 —— "杆位是地板"在"该收油"的场景等于废掉油门环。
@@ -662,7 +663,7 @@ def write_readouts(xml):
         lbl = ('    <Part id="%d" partType="Label-1" position="%s" rotation="%s" '
                'drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="12,12,12" symmetryDisabled="true" '
                'dragType="None" health="1E+09" partCollisionResponse="None">\n'
-               '      <Label.State designText="%s" fontName="Default" fontSize="2.5" '
+               '      <Label.State designText="%s" fontName="Default" fontSize="0.2" '
                'horizontalAlignment="Center" verticalAlignment="Middle" width="0.8" height="1.45" '
                'outlineWidth="0" emissionDay="2" emissionNight="2" offset="0,0.006,0" '
                'rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />\n'
@@ -682,8 +683,7 @@ def write_readouts(xml):
         tid = m.group(1)
         blk = re.sub(r'(designText=")[^"]*(")',
                      lambda x, t=texts[k]: x.group(1) + esc_label(t) + x.group(2), m.group(0), count=1)
-        # 用户授权：字号压到 0.15（≈原 0.5 的 30%）以容纳更多字；位置与框尺寸不动
-        blk = re.sub(r'(fontSize=")[^"]*(")', lambda x: x.group(1) + LABEL_FONT + x.group(2), blk, count=1)
+        # 字号 fontName/size 一律**由用户自设、生成器绝不改写**（用户 2026-09-26 已定 20%，别刷回）；位置/框尺寸按需不动
         if tid in LABEL_BOX:
             w, h = LABEL_BOX[tid]
             blk = re.sub(r'(width=")[^"]*(")', lambda x: x.group(1) + w + x.group(2), blk, count=1)
