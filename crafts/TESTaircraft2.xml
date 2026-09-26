@@ -554,6 +554,7 @@
     <Setter variable="AU12" function="(AN12 ? 1 : AU11)" priority="0" />
     <Setter variable="Ael" function="AT12 - 0.0524 * max(AS12, 0)" priority="0" />
     <Setter variable="Aexc" function="max(0, (Altitude - Ael) - AS12 * tanG)" priority="0" />
+    <Setter variable="rwyEng" function="((rwyOk &gt; 0.5) | (AU12 &gt; 0.5)) ? 1 : 0" priority="0" />
     <Setter variable="PAn" function="clamp01((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3) &amp; (AU12 &gt; 0.5))" priority="0" />
     <Setter variable="PNn" function="clamp01(AS12 &lt;= 4850)" priority="0" />
     <Setter variable="PTn" function="clamp01(Aexc &gt; 100)" priority="0" />
@@ -564,7 +565,7 @@
     <Setter variable="h2" function="clamp01(PH &gt; 1.5)" priority="0" />
     <Setter variable="hCmd" function="h0 * AB12 + h1 * (AH12 + atan2(0 - (AS12 - 4850), 0 - (AL12 + 200))) + h2 * AH12" priority="0" />
     <Setter variable="bankApp" function="(PH &gt; 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk" priority="0" />
-    <Setter variable="altTgt" function="min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? (clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5)) * (Altitude - 400) + (1 - clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))) * TLA) : 9999999)" priority="0" />
+    <Setter variable="altTgt" function="clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5)) * (Altitude - 400) + (1 - clamp01((PH &gt; 0.5) &amp; (PH &lt; 1.5))) * min(VTOL &gt; 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD &lt; 15000) ? TLA : 9999999)" priority="0" />
     <Setter variable="vsLine" function="0.25 * (altTgt - Altitude) + (((SD &gt; 0) &amp; (SD &lt; 15000)) ? 0.0524 * clamp(rate(SD), -160, 160) : 0)" priority="0" />
     <Setter variable="vsCmd" function="clamp((AltitudeAgl &lt; 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))" priority="0" />
     <Setter variable="vsErr" function="vsCmd - vs" priority="0" />
@@ -599,7 +600,7 @@
     <Setter variable="gearUp" function="(GearDown &gt; 0.5) ? 0 : 1" priority="0" />
     <Setter variable="gearAx" function="min(0 - gearCmd, LandingGear - 1)" priority="0" />
     <Setter variable="lgWarn" function="((SD &lt; 15000) &amp; (AltitudeAgl &lt; 400) &amp; (gearUp &gt; 0.5)) ? 1 : 0" priority="0" />
-    <Setter variable="thrNow" function="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? thrCmd : Throttle" priority="0" />
+    <Setter variable="thrNow" function="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? thrCmd : Throttle" priority="0" />
   </Variables>
   <Assembly>
     <Parts>
@@ -658,7 +659,7 @@
       </Part>
       <Part id="11" partType="ControlSurface-Flap-1" position="4.618141,3.608751,0.6316793" rotation="0.1858174,355.5146,1.903205" drag="0,0.01930647,0.4304288,0.4403571,0,0.0008757859" dragArea="0,0.1141298,0.4409573,0.4409573,0,0.02233254" materials="3,2" symmetryDisabled="true" partCollisionResponse="Default">
         <ControlSurfacePart.State style="StandardFlap" range="4.099999,5.799998" startPos="-0.2271918,-0.09512199" maxDeflection="30" dummyWingOffset="0.1762269,0.1974975" dummyWingScale="1.366493,1.083315" />
-        <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.010 * (RollAngle - (phiCmdF + (phiCmd - phiCmdF) * ((Activate7 ? 1 : 0) * clamp01(rwyOk)))) + 0.004 * RollRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * Roll" zeroOnDeactivate="false" />
+        <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.010 * (RollAngle - (phiCmdF + (phiCmd - phiCmdF) * ((Activate7 ? 1 : 0) * clamp01(rwyEng)))) + 0.004 * RollRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * Roll" zeroOnDeactivate="false" />
       </Part>
       <Part id="16" partType="JWing-1" position="0.3125004,3.555744,-3.880226" rotation="0,0,0" drag="0,0.003590717,1.021484,1.022287,0,0.04717565" dragArea="0,0.02853246,1.050518,1.050518,0,0.1246899" centerOfMass="0.5443685,0,0.1178468" materials="0,2" symmetryId="6" partCollisionResponse="Default">
         <JWing.State chordSamples="10" colliderSamples="5" flipped="false" fuelFraction="0" version="3" disableWingtipVortices="false">
@@ -669,7 +670,7 @@
       </Part>
       <Part id="17" partType="ControlSurface-Flap-1" position="0.3125004,3.555744,-4.047657" rotation="0,13.54333,0" drag="0,0.01618365,0.4553297,0.45535,0,0.009305224" dragArea="0,0.1374746,0.4591144,0.4591144,0,0.009305224" materials="3,2" symmetryId="7" partCollisionResponse="Default">
         <ControlSurfacePart.State style="StandardFlap" range="0,1.6" startPos="-0.1549999,-0.5450001" maxDeflection="30" dummyWingOffset="0.07500005,-0.4" dummyWingScale="1.15,0.725" />
-        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.040 * (PitchAngle - (cmdTheF + (cmdThe - cmdTheF) * ((Activate7 ? 1 : 0) * clamp01(rwyOk)))) - 0.007 * PitchRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * clamp(Trim + Pitch, -1, 1)" zeroOnDeactivate="false" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.040 * (PitchAngle - (cmdTheF + (cmdThe - cmdTheF) * ((Activate7 ? 1 : 0) * clamp01(rwyEng)))) - 0.007 * PitchRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * clamp(Trim + Pitch, -1, 1)" zeroOnDeactivate="false" />
       </Part>
       <Part id="18" partType="JWing-1" position="-0.3124997,3.555744,-3.880226" rotation="0,0,180" drag="0,0.003590717,1.021484,1.022288,0.04717565,0" dragArea="0,0.02853246,1.050518,1.050518,0.1246899,0" centerOfMass="0.5443685,0,0.1178468" materials="0,2" symmetryId="6" partCollisionResponse="Default">
         <JWing.State chordSamples="10" colliderSamples="5" flipped="true" fuelFraction="0" version="3" disableWingtipVortices="false">
@@ -712,14 +713,14 @@
             <Pose element="SupportStrut" position="0,0.03236866,1.199256" rotation="0,0,0,1" hasPosition="true" hasRotation="false" />
           </Keyframe>
         </Animator.State>
-        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
       <Part id="23" partType="JWheelAssembly-1" position="3.874302E-07,2.328799,3.29946" rotation="1.366038E-05,5.008956E-06,6.48003E-13" drag="0.0390198,0.03897911,0,0.03646663,0.1032989,0.1032259" dragArea="0.06484651,0.06484651,0,0.05447106,0.1153847,0.1153847" materials="6,0,2,0,8,4,4,4,4,4" symmetryDisabled="true" partCollisionResponse="Default">
         <JWheelAssembly.State turningAngle="45" turningAngleDampening="0.5" reversed="true" size="0.75" width="1" tire="TireLadingGeaGrooved" rim="RimLandingGearSmooth" turningRate="150" brake="1" frictionPreset="LandingGear" tractionForward="1" tractionSideways="1" frictionForcePoint="0" wheelAssemblyStyle="WA-SingleOffset" rimOffset="0.5" wheelOffset="0.54" flipped="false" useWorldUpAxis="true">
           <Variables />
         </JWheelAssembly.State>
         <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Yaw" />
-        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
       </Part>
       <Part id="24" partType="GearBay-1" position="-8.957088E-05,2.943239,3.807272" rotation="270,180,0" drag="0.02239875,0.02032366,0.03368968,0.4724296,0.1113416,0.1354768" dragArea="0.07522195,0.07003423,0.0389079,0.5524939,0.2289088,0.2624076" materials="0,15,15,0,15,15" symmetryDisabled="true" partCollisionResponse="Default">
         <PartTargeting.State targetMode="MultipleParts" partIds="2,1" />
@@ -734,7 +735,7 @@
             <Pose element="door1" position="0,0,0" rotation="0,0,0.9659261,0.2588191" hasPosition="false" hasRotation="true" />
           </Keyframe>
         </Animator.State>
-        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
       <Part id="25" partType="GearLeg-1" position="1.539015,3.474494,0.4947729" rotation="8.537739E-07,270,0" drag="0.0614389,0.06661645,0,0,0,0.05934908" dragArea="0.09337897,0.09856669,0,0,0,0.07816385" name="Wing Gear Leg" materials="0,0,4,4,4,0,0,0,4,4,4" symmetryId="5" partCollisionResponse="Default">
         <GearLeg.State gearLegStyle="GL-Wing" size="0.75" flipped="false" supportStrutType0="None" supportStrutType1="" supportStrutType2="" torqueLinkType="TL-Slanted" suspensionTravel="0.3" torqueLinkLength="0.07" springForceScale="1" damperScale="1" catapultConnectorEnabled="false" catapultAcceleration="1" catapultNoseCompression="0" targetLaunchSpeed="175">
@@ -750,18 +751,18 @@
             <Pose element="MainStrut" position="0,-0.01658589,2.471491E-10" rotation="-1.264406E-07,-0.7431449,-0.6691308,-8.42937E-08" hasPosition="true" hasRotation="true" />
           </Keyframe>
         </Animator.State>
-        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
       <Part id="26" partType="JWheelAssembly-1" position="1.539015,2.507755,0.4900856" rotation="-1.019375E-05,4.829673E-06,-2.387271E-06" drag="0.06780657,0.06780656,0,0.06016739,0,0.2377249" dragArea="0.1011605,0.1011605,0,0.09078511,0,0.2586855" materials="6,0,2,0,5,4,4,4,4,4" symmetryId="4" partCollisionResponse="Default">
         <JWheelAssembly.State turningAngle="0" turningAngleDampening="0.5" reversed="false" size="1.15" width="0.7" tire="TireLadingGeaGrooved" rim="RimLandingGearStang" turningRate="150" brake="1" frictionPreset="Racing" tractionForward="1" tractionSideways="1" frictionForcePoint="0" wheelAssemblyStyle="WA-SingleOffsetWing" rimOffset="0.5" wheelOffset="0.54" flipped="false" useWorldUpAxis="true">
           <Variables />
         </JWheelAssembly.State>
         <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="Yaw" />
-        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
       </Part>
       <Part id="12" partType="ControlSurface-Flap-1" position="-0.3124997,3.555744,-4.047657" rotation="1.173E-06,346.4567,180" drag="0,0.01618365,0.4553297,0.45535,0.009305224,0" dragArea="0,0.1374746,0.4591144,0.4591144,0.009305224,0" materials="3,2" symmetryId="7" partCollisionResponse="Default">
         <ControlSurfacePart.State style="StandardFlap" range="0,1.6" startPos="-0.1549999,-0.5450001" maxDeflection="30" dummyPartFlipped="true" dummyWingOffset="0.07500005,-0.4" dummyWingScale="1.15,0.725" />
-        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.040 * (PitchAngle - (cmdTheF + (cmdThe - cmdTheF) * ((Activate7 ? 1 : 0) * clamp01(rwyOk)))) - 0.007 * PitchRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * clamp(Trim + Pitch, -1, 1)" zeroOnDeactivate="false" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.040 * (PitchAngle - (cmdTheF + (cmdThe - cmdTheF) * ((Activate7 ? 1 : 0) * clamp01(rwyEng)))) - 0.007 * PitchRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * clamp(Trim + Pitch, -1, 1)" zeroOnDeactivate="false" />
       </Part>
       <Part id="14" partType="ModifierWindow-1" position="-4.792213E-05,3.943244,2.101952" rotation="90,9.659345E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="15" symmetryDisabled="true" partCollisionResponse="Default">
         <PartTargeting.State targetMode="MultipleParts" partIds="1" />
@@ -788,7 +789,7 @@
       </Part>
       <Part id="30" partType="ControlSurface-Flap-1" position="-4.618142,3.608751,0.6316897" rotation="0.1858019,4.485072,178.0968" drag="0,0.01930647,0.4304288,0.4403571,0.0008757859,0" dragArea="0,0.1141298,0.4409573,0.4409573,0.02233254,0" materials="3,2" symmetryDisabled="true" partCollisionResponse="Default">
         <ControlSurfacePart.State style="StandardFlap" range="4.099999,5.799998" startPos="-0.227181,-0.09512072" maxDeflection="30" dummyPartFlipped="true" dummyWingOffset="0.1762531,0.1975003" dummyWingScale="1.366545,1.083321" />
-        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.010 * (RollAngle - (phiCmdF + (phiCmd - phiCmdF) * ((Activate7 ? 1 : 0) * clamp01(rwyOk)))) + 0.004 * RollRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * Roll" zeroOnDeactivate="false" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(Activate8 ? boot : 0) * clamp(0.010 * (RollAngle - (phiCmdF + (phiCmd - phiCmdF) * ((Activate7 ? 1 : 0) * clamp01(rwyEng)))) + 0.004 * RollRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * Roll" zeroOnDeactivate="false" />
       </Part>
       <Part id="32" partType="GearLeg-1" position="-1.539015,3.474494,0.4947729" rotation="8.537739E-07,90,0" drag="0.0614389,0.06661645,0,0,0.05934908,0" dragArea="0.09337897,0.09856669,0,0,0.07816385,0" name="Wing Gear Leg" materials="0,0,4,4,4,0,0,0,4,4,4" symmetryId="5" partCollisionResponse="Default">
         <GearLeg.State gearLegStyle="GL-Wing" size="0.75" flipped="true" supportStrutType0="None" supportStrutType1="" supportStrutType2="" torqueLinkType="TL-Slanted" suspensionTravel="0.3" torqueLinkLength="0.07" springForceScale="1" damperScale="1" catapultConnectorEnabled="false" catapultAcceleration="1" catapultNoseCompression="0" targetLaunchSpeed="175">
@@ -804,20 +805,20 @@
             <Pose element="MainStrut" position="0,-0.01658589,2.471491E-10" rotation="-1.264406E-07,0.7431449,0.6691308,-8.42937E-08" hasPosition="true" hasRotation="true" />
           </Keyframe>
         </Animator.State>
-        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
       <Part id="33" partType="JWheelAssembly-1" position="-1.539015,2.507755,0.4900856" rotation="-1.019375E-05,-4.829673E-06,2.387271E-06" drag="0.06780656,0.06780656,0,0.06016739,0.2377248,0" dragArea="0.1011605,0.1011605,0,0.09078511,0.2586855,0" materials="6,0,2,0,5,4,4,4,4,4" symmetryId="4" partCollisionResponse="Default">
         <JWheelAssembly.State turningAngle="0" turningAngleDampening="0.5" reversed="false" size="1.15" width="0.7" tire="TireLadingGeaGrooved" rim="RimLandingGearStang" turningRate="150" brake="1" frictionPreset="Racing" tractionForward="1" tractionSideways="1" frictionForcePoint="0" wheelAssemblyStyle="WA-SingleOffsetWing" rimOffset="0.5" wheelOffset="0.54" flipped="true" useWorldUpAxis="true">
           <Variables />
         </JWheelAssembly.State>
         <InputController.State activationGroup="0" invert="true" min="-1" max="1" input="Yaw" />
-        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
+        <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
       </Part>
       <Part id="34" partType="AirBrake-1" position="0.8124522,3.568244,1.307273" rotation="0,0,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="3,4" symmetryId="3" partCollisionResponse="Default">
-        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? max(spdBrk, Brake) : Brake" />
+        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? max(spdBrk, Brake) : Brake" />
       </Part>
       <Part id="35" partType="AirBrake-1" position="-0.8124516,3.568244,1.307273" rotation="0,0,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="3,4" symmetryId="3" partCollisionResponse="Default">
-        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? max(spdBrk, Brake) : Brake" />
+        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? max(spdBrk, Brake) : Brake" />
       </Part>
       <Part id="7" partType="JPropEngineRadial" position="3.576279E-07,3.443244,4.924771" rotation="0,180,0" drag="0.2931469,0,0.1506779,0.1535768,0.1296528,0.1350316" dragArea="0.3890798,0,0.2023211,0.2075088,0.1786604,0.1842435" centerOfMass="0,0,0.2635" materials="1,3,3,4,4,1,-3" partCollisionResponse="Default">
         <JEngine.State engineConfiguration="1" cylinderRows="1" engineTuning="0" size="1" mass="1.80000007" horsePower="300" rpm="2250" supercharger="false" forcedInduction="1" powerCurve="0" soundPitchLimit="-1" soundPitchOffset="-1" soundPitchRange="-1">
@@ -833,7 +834,7 @@
           <Variables />
         </PropellerAssembly.State>
         <InputController.State activationGroup="8" invert="false" min="0" max="1" input="VTOL" />
-        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? revOn : 0" zeroOnDeactivate="false" />
+        <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? revOn : 0" zeroOnDeactivate="false" />
       </Part>
       <Part id="36" partType="Label-1" position="-0.2134525,3.899432,2.801952" rotation="270,1.147003E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
         <Label.State designText="IAS{round(IAS)} GS{round(GS)} m/s" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.2" height="0.3" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
@@ -914,7 +915,7 @@
             <Pose element="door1" position="0,0,0" rotation="0,0,0.9659261,0.2588191" hasPosition="false" hasRotation="true" />
           </Keyframe>
         </Animator.State>
-        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
       <Part id="51" partType="GearBay-1" position="-0.5155928,3.005739,0.5037711" rotation="270,180,0" drag="0.01037544,0.01283707,0,0.08784538,0.4543137,0" dragArea="0.01037544,0.0129693,0,0.1763825,0.5359799,0" materials="0,15,15,15,15,15" symmetryId="2" partCollisionResponse="Default">
         <PartTargeting.State targetMode="MultipleParts" partIds="1" />
@@ -929,7 +930,7 @@
             <Pose element="door1" position="0,0,0" rotation="0,0,-0.9659261,0.2588191" hasPosition="false" hasRotation="true" />
           </Keyframe>
         </Animator.State>
-        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
+        <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
     </Parts>
     <Connections>

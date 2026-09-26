@@ -214,6 +214,8 @@ AS, AL, AT, AB, AH, AU = _prevA
 PANEL += [
     ("Ael",  AT + " - 0.0524 * max(" + AS + ", 0)"),                          # 目标场高
     ("Aexc", "max(0, (Altitude - Ael) - " + AS + " * tanG)"),                 # 目标"太高"余量
+    # rwyEng = 走廊(rwyOk) 或 四态识别到目标(AU) ⇒ 7 层接管的门（不再只认走廊；否则高/远/斜切时横向被门掉=飞走）
+    ("rwyEng", "((rwyOk > 0.5) | (" + AU + " > 0.5)) ? 1 : 0"),
     ("PAn",  "clamp01((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3) & (" + AU + " > 0.5))"),
     ("PNn",  "clamp01(" + AS + " <= 4850)"),                                  # 已到 FAF 区
     ("PTn",  "clamp01(Aexc > 100)"),                                          # 太高
@@ -229,7 +231,7 @@ PANEL += [
     ("bankApp", "(PH > 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk"),
 ]
 PANEL += [
-    ("altTgt", "min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? (clamp01((PH > 0.5) & (PH < 1.5)) * (Altitude - 400) + (1 - clamp01((PH > 0.5) & (PH < 1.5))) * TLA) : 9999999)"),
+    ("altTgt", "clamp01((PH > 0.5) & (PH < 1.5)) * (Altitude - 400) + (1 - clamp01((PH > 0.5) & (PH < 1.5))) * min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? TLA : 9999999)"),
     # 道线自身以 0.0524·GS 下沉（85 m/s 时 4.5 m/s）⇒ 纯 P 追斜坡的稳态误差=斜率/增益=18 m
     # （app30 实测 +16~+18 m 恒定滞后，与 SC-5 当年同案）⇒ 补上前馈项。
     # v1.6：前馈**只对斜坡段有效**（`SD > 0`）——过阈值后道线是平的（`max(SD,0)`），
@@ -474,9 +476,9 @@ PANEL += [
 # 同时串上 `boot`（clamp01(Time*0.25)=2 s 后过半）避免第 0 帧抢杆——软启动原语终于用上。
 # 失效安全：面板整块死 ⇒ boot=0 ⇒ 律不接杆，退回原生手动（比"姿态压 0"更好）。
 GATE = "(Activate8 & (boot > 0.5))"
-AIL = ("(Activate8 ? boot : 0) * clamp(0.010 * (RollAngle - (phiCmdF + (phiCmd - phiCmdF) * ((Activate7 ? 1 : 0) * clamp01(rwyOk))))"
+AIL = ("(Activate8 ? boot : 0) * clamp(0.010 * (RollAngle - (phiCmdF + (phiCmd - phiCmdF) * ((Activate7 ? 1 : 0) * clamp01(rwyEng))))"
        " + 0.004 * RollRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * Roll")
-ELE = ("(Activate8 ? boot : 0) * clamp(0.040 * (PitchAngle - (cmdTheF + (cmdThe - cmdTheF) * ((Activate7 ? 1 : 0) * clamp01(rwyOk))))"
+ELE = ("(Activate8 ? boot : 0) * clamp(0.040 * (PitchAngle - (cmdTheF + (cmdThe - cmdTheF) * ((Activate7 ? 1 : 0) * clamp01(rwyEng))))"
        " - 0.007 * PitchRate, -1, 1) + (1 - (Activate8 ? boot : 0)) * clamp(Trim + Pitch, -1, 1)")
 # 方向舵（用户点名"Yaw 得参与航向稳定"）——**app20 试 0.10 被用户判"相当抖"，已回滚到原厂值**：
 # 阻尼加大后出现明显抖振 ⇒ 该通道不是"加大增益就行"的事，符号与权限都得先标定。
@@ -514,7 +516,7 @@ RUD_PARTS = ["21"]              # 方向舵
 # ★统一"降落模式门"（v2.9.8）：**不用 `&`/`|`**。引擎里 And/Or 被强制成 bool+AndAlso（`type = typeof(bool)`），
 #   而 bool↔数值转换是 true→1 / **false→−1**、数值→bool 是 `v > 0` ⇒ 拿 `Activate7` 做乘减或用 1−x 都会错一位。
 #   所以：`clamp01(Activate7)` 把 −1/1 变成 0/1；`clamp01(boot * 2 - 1)` 让软启动在 2 s 处才过 0.5；两者乘完再 `> 0.5` 得一个干净的 bool 条件。
-APP_GATE = "(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) > 0.5)"   # v2.22 M1b：×rwyOk ⇒ 前向无合法跑道时构型/能量/刹车通道全部退出
+APP_GATE = "(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyEng) > 0.5)"   # v2.22 M1b：×rwyOk ⇒ 前向无合法跑道时构型/能量/刹车通道全部退出
 # 默认=出厂原接法（诊断态）。`--gearprobe` 时改成"t<30 s ⇒ −1 / t≥30 s ⇒ +1"的常量台阶：
 #   出厂态下 t=0 腿本来就是放下(−1)，所以 30 s 那一刻如果腿**自己折起来** ⇒ 腿 IC 确实在驱动收放（=我写的东西在拦你）；
 #   如果 30 s 前后毫无变化 ⇒ 腿 IC 根本不是收放的驱动者，我此前所有关于"腿可控"的判断全部作废，得回去重读 GearLegScript。
