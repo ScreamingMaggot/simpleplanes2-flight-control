@@ -33,8 +33,9 @@ Two generations of architecture coexist:
 ### SC-6 运行模式 / SC-6 modes
 
 - **Activate8 = 持存增稳 + 定高** / persistent stabilization + altitude hold;
-- **Activate7 = 降落模式**（进近走廊 + 3° 下滑 + 拉平 + 自动放轮 + 滑跑刹车 + 反推）/ landing mode (approach corridor + 3° glideslope + flare + auto gear + rollout braking + thrust reversal);
-- 座舱内 8 块 Label 为长航时读数（空速/地速、无线电高/升降率、目标高、航向/航迹、横偏/选场态、风、油量/油门、构型/模式）。/ Eight cockpit labels serve long-duration readouts (IAS/GS, AGL/vs, target altitude, heading/track, cross-track/selection state, wind, fuel/throttle, config/modes).
+- **Activate7 = 降落模式**（进近走廊 + 3° 下滑 + 拉平 + 自动放轮 + 滑跑刹车 + 反推）/ landing mode (approach corridor + 3° glideslope + flare + auto gear + rollout braking + thrust reversal). **按 7 后空中油门完全交自动油门接管** / once armed, the autothrottle fully owns thrust in flight (the lever no longer raises actual throttle).
+- **机头双轴"速度矢量"灯** / a nose **2-axis velocity-vector light**: two rotator bars show, relative to the nose, the ground-track crab angle (horizontal) and the flight-path angle (vertical) — together they point where the aircraft is actually going.
+- 座舱内 8 块 Label 为长航时读数（空速/地速、无线电高/升降率、目标高、航向/航迹、横偏/选场态、风、**油量 / 实际发动机油门**、构型/模式）。/ Eight cockpit labels serve long-duration readouts (IAS/GS, AGL/vs, target altitude, heading/track, cross-track/selection state, wind, fuel / **actual engine throttle**, config/modes).
 
 ---
 

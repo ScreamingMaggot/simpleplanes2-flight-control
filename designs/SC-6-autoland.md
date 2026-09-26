@@ -1280,6 +1280,13 @@ M1b＝把选型链的 `rwyOk`（有无可落地跑道）**与**进降落层门�
 - 选择可沿用 v2.24（cap8+CL+commit+SLK），但**只有配上航段缓飞律才安全**。
 - 上机前：真人守卫飞、只按 7、先低速近场验证"不急转"，再谈远场。
 
+## v2.25（2026-09-26）油门全接管 + 实际油门读数 + 机头双轴速度矢量灯（灯件为设计器手摆，非生成器产物）
+
+- **油门全接管（用户定）**：`thrCmd` 空中段去掉 `max(Throttle, thrPI)` 那层"杆位地板" ⇒ `airFly*thrPI + (1-airFly)*(1-gndIdle)*Throttle`。进 7 且在空中走廊时油门=纯自动油门，推杆不再抬高它；地面未离地仍交回杆（能起飞）；整段仍受 `APP_GATE(7*boot*rwyOk)` 选通（防巡航被锁进近速）。
+- **`thrNow` 实际油门**：新增 setter `thrNow = APP_GATE ? thrCmd : Throttle`，**引擎 IC 通道与座舱 TH 标签都读它** ⇒ 显示=真施加值，与杆位分离（7 接管时看得到自动油门实际给多少）。
+- **速度矢量灯（手摆件，记录在案）**：机头 4 个 SmallRotator + 2 FormationLight 组双轴针。水平=对地真实航迹偏流 β `deltaangle(trkUse, Heading)`；垂直=对地航径角 `atan2(vs, sqrt(max(GS²−vs²,0))) − PitchAngle`（相对机头，非空速系）。**踩过的坑**：① SmallRotator 默认 `allowFreeSpin=true` 不锁角→换 Hinge；② `speed→0` 反而伺服欠阻尼自激 + 低速 `trkUse` 脏→`smooth(…,1.0)` 加阻尼 + 低速门；③ 转轴随机体甩动有反作用俯仰/偏航力矩→灯条 `disableAircraftCollisions` + 轻质量 + 两端反向对转抵消。**注**：这些是设计器手摆部件，`ft_ta2_patch.py` 生成器不产它们、`--apply` 已验证不冲掉（只重写 Variables 面板与执行器通道）。仓库 `crafts/TESTaircraft2.xml` 已回灌为含灯件+新油门的实时版。
+
+
 
 
 
