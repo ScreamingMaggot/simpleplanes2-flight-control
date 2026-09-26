@@ -1,4 +1,4 @@
-# Steam Workshop 描述文案（两机体）
+# Steam Workshop / 官网 描述文案（三机体）
 
 发布路径：SimplePlanes 2 → 设计器/机库 → 选中机体 → Share → 粘贴对应描述。
 截图建议：机体三视图 + 一张 3D 航迹图（analysis/figures/ 里有现成的）。
@@ -46,3 +46,36 @@ https://github.com/ScreamingMaggot/simpleplanes2-flight-control
 **描述（中文）：**
 
 双发喷气研究机（推重比 1.79）。自主机炮空战套件演示：16 km 级信标截获、比例导引（坡度对靶 + 视线角速率阻尼）、"拉杆穿透"射法（目标悬于准星上部扇区，机头扫过瞬间开火）、能量管理油门与射击窗自动开炮。实测：IAS 峰值 321 m/s、持续滚转 100~190°/s、过载 p95 8.8 g。已完成自主击落，全过程取证见报告 SC-2。导引律在机体 FT 表达式内，慢回路见 GitHub（MIT）。
+
+---
+
+## TESTaircraft2（SC-6 · 纯 FT 电传飞控，随机体自带、零脚本）
+
+**Title:** FT Fly-by-Wire Autoland Trainer（FT 电传飞控 · 自动着陆教练机）
+
+**Description (EN):**
+
+Fly-by-wire whose control laws live **entirely inside the craft's Funky-Trees expressions** — ships with the plane, **no addon, no script**. One switch to stabilize & hold altitude, one to fly the approach and land, plus a 2-axis velocity-vector light on the nose.
+
+Features:
+- **AG8** — stabilization + altitude hold (hands-off stays level & holds height)
+- **AG7** — autoland: approach-corridor capture → 3° glideslope → flare → gear down → touchdown retard → wheel brakes + auto reverse
+- Autothrottle has **full** authority when AG7 is armed (lever can't override in flight)
+- Nose **velocity-vector light**: horizontal = ground-track crab, vertical = flight-path angle — points where you're actually going
+- 8 cockpit readouts: IAS·GS, AGL·vs, target alt, HDG·TRK, cross-track, wind, fuel·actual throttle, gear·modes
+- Full pilot override at any time
+
+Controls: **AG8** = FBW stabilization · **AG7** = landing mode · **VTOL dial** = target/cruise altitude. Turn off AG7 to reclaim the throttle lever.
+
+How to land: fly near a field, roughly lined up (≤~15 km), switch **AG7** on — it captures the centerline, flies the 3° slope, drops gear, flares, retards, brakes. You fly to the field first; long-range auto-routing is WIP.
+
+Source (FT flight-computer generator, design docs & this craft — reproducible, MIT):
+https://github.com/ScreamingMaggot/simpleplanes2-flight-control
+
+**描述（中文）：**
+
+控制律 100% 写在机体 Funky-Trees 表达式里、随机体自带、**零模组零脚本**。一键增稳定高、一键进近自动着陆，机头还有一盏双轴"速度矢量"灯。
+- **AG8** = 电传增稳 + 定高；**AG7** = 降落模式（进近走廊 → 3° 下滑 → 拉平 → 放轮 → 接地收油 → 刹车 + 反推）；按 7 后**油门完全交给自动油门**；全程可手动超控。
+- **VTOL 旋钮** = 目标/巡航高度；关 AG7 即交还油门杆。
+- 用法：飞到目标机场附近、大致对准跑道（约 15 km 内）→ 开 **AG7** 自动落地。需先飞到进近走廊附近，远处自动规划航线为开发中。
+- 飞控生成器 + 设计文档 + 本机体（可复现，MIT）：https://github.com/ScreamingMaggot/simpleplanes2-flight-control
