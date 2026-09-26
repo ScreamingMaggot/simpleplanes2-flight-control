@@ -393,7 +393,37 @@ Lua script error: chunk_1:(1288,1-44): cannot access field VTOL of userdata<Asse
 **纪律账**：§30 早就写着"Lua 代理可读面有限"，我却把未逐个实测过的轴直接裸读，
 **法典里已有的纪律又犯一遍**。⇒ 规程：**任何未实测的代理字段名，先探针/先包 pcall，才准进主链路**。
 
-**机械防复发**：`build_mirror_addon.py:check_proxy_reads()` —— **代理裸读闸**，
-只扫镜像块（不扫 addon 既有代码，否则满屏假阳性），并正确处理 Lua 长注释 `--[[ ]]`；
+**机械防复发**：`check_proxy_fields.py` —— **代理字段检查器（扫全文件）** +
+`build_mirror_addon.py:check_proxy_reads()`（生成期调用它，`--strict` 语义）。
 已用"故意去掉 `_g` → 闸必须红；恢复 → 放行"反向验证过。同类"生成期闸"的价值在此再次确认：
 **语法闸（luaparser）对这种错完全无能为力**——错的是运行时语义，不是语法。
+
+### ★§38 补（同日二次事故）：**窄闸 = 闸绿机毁** —— 闸的作用域必须是全文件
+
+**第一次修复为什么无效**：我只把闸与修复限定在"我生成的镜像块"。
+但第二局实飞报错**一字未变**，只有 chunk 行号从 1288 → 1343（脚本变长=新版确实载入），
+换算到 addon 行 ≈801–805 —— 正是 **`telemetry-addon.lua:805 local ft8_vtol = craft.Controls.VTOL or 0`**：
+**既有 FT8 复算代码里的裸读，根本不在镜像块里**。
+
+**为什么它以前不炸**：这段 FT8 代码长期被 `FT_ONLY` / 条件门挡着**没被执行到**；
+我把 `_appr_log()` 挂进 `update()` 后**改变了执行路径**，把它踩响了。
+⇒ 教训：**"老代码一直没出事"不等于"老代码是安全的"**——
+它可能只是**从未跑到**。挂新回调进同一个函数，等于给沉睡的裸读通电。
+
+**正确的作用域（已改）**：
+- 扫描/加固一律**扫全文件**（排除注释与字符串），不再只扫镜像块；
+- **白名单只放有实测证据的字段**（`LandingGearDown`＋`Throttle/Trim/Pitch/Roll/Yaw`，都是 TEL 行长期在用）；
+- **凡历史上被 `pcall` 包过的字段，默认都不可信**（`Flaps` 在 addon 里两处都包着 pcall ⇒ 当年作者也不确定）；
+- 加 `harden_proxy_reads()`：注入前**自动**把 `local x = craft.Controls.<字段> or d` 改写成
+  `local x = d` + `pcall(...)`（幂等、形态极窄，避免误伤能跑的代码）。
+
+**验收口径（三件齐了才算修好）**：① `TELHDR` 之后有 TEL 数据行（命脉）；
+② `APPRHDR` 之后有 APPR 数据行；③ `grep -i "Lua script error"` **为空**。
+只要还有一条 `Lua script error`，就说明还有下一个未保护的字段在等着。
+
+**发货态核对方法（不靠成功提示）**：直接在 `resources.assets` 字节里搜——
+危险形态 `local ft8_vtol   = craft.Controls.VTOL` 应为 **0**；
+保护形态 `pcall(function() ft8_vtol = craft.Controls.VTOL or 0 end)` 应为 **1**。
+
+**代价账**：用户为这条观测线飞了**四个架次**（① 旧补丁没数据 ② VTOL 打死 ③ 只修镜像块、同处裸读仍在 ④ 本修）。
+根因都是同一个纪律缺口：**未实测的代理字段直接进主链路**。

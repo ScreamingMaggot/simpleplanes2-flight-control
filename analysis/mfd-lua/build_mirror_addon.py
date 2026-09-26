@@ -112,6 +112,55 @@ end
                .replace("@@ARGS@@", args))
 
 
+def harden_proxy_reads(src):
+    """把既有 addon 里**未保护的代理裸读**改写成 pcall 包裹（幂等、可重跑）。
+
+    2026-09-27 事故的直接修复。规则**极窄、只认一种形态**，避免误伤：
+        缩进 + `local <名> = craft.Controls.<字段> or <默认>`（或 `['字段']`）
+    改写成：
+        缩进 + `local <名> = <默认>`
+        缩进 + `pcall(function() <名> = craft.Controls.<字段> or <默认> end)`
+
+    为什么不用通用改写：addon 里其余 `craft.Controls.X` 都是**已实测可读**（TEL 行长期在用）
+    或**在写轴**（`OverrideInput`），通用替换会引入真实风险。只修"已知会抛"的那一类。
+    """
+    lines = src.split("\n")
+    out, fixed = [], []
+    pat = re.compile(r'^(\s*)local\s+(\w+)\s*=\s*craft\.Controls\.(\w+)\s+or\s+(.+?)\s*$')
+    already = re.compile(r'pcall\(function\(\)\s*\w+\s*=\s*craft\.Controls\.')
+    in_pcall_block = False
+    for n, line in enumerate(lines, 1):
+        if already.search(line):
+            in_pcall_block = True
+            out.append(line)
+            continue
+        if in_pcall_block:
+            # pcall 块结束行（`end)`）之后恢复正常扫描
+            if re.match(r'^\s*end\)\s*$', line):
+                in_pcall_block = False
+            out.append(line)
+            continue
+        m = pat.match(line)
+        if m:
+            indent, name, field, dflt = m.groups()
+            # 只有"已证不可读/无证据"的字段才改；白名单字段保持原样（不动能跑的代码）
+            if field not in SAFE_PROXY_FIELDS:
+                out.append("%slocal %s = %s" % (indent, name, dflt))
+                out.append("%spcall(function() %s = craft.Controls.%s or %s end)"
+                           % (indent, name, field, dflt))
+                fixed.append((n, field))
+                continue
+        out.append(line)
+    return "\n".join(out), fixed
+
+
+# 可裸读的字段白名单（有实测/长期证据）。不在表内的一律按"不可信"处理。
+SAFE_PROXY_FIELDS = {
+    "LandingGearDown",  # §30 实测；telemetry-addon 长期在用
+    "Throttle", "Trim", "Pitch", "Roll", "Yaw",   # TEL 行长期在用
+}
+
+
 def check_proxy_reads(src, mirror_start_marker="local _ftmirror", mirror_end_marker="-- ==== /面板镜像 ===="):
     """**代理裸读闸**（2026-09-27，为一整局架次付账的那道闸）。
 
@@ -176,6 +225,18 @@ def check_proxy_reads(src, mirror_start_marker="local _ftmirror", mirror_end_mar
                 probs.append("镜像块第 %d 行仍有裸读 %s（必须改 _g）：%s"
                              % (n, bad, l.strip()[:70]))
 
+    # ── ★全文件扫描（2026-09-27 二次事故修正：上一版只扫镜像块 ⇒ 闸绿机毁）──────────
+    #   事故现场 `:805 craft.Controls.VTOL` **不在镜像块里**，是既有 FT8 复算代码。
+    #   故此处追加：用独立扫描器扫**整个 addon**，凡"未保护 且 不在已实测白名单"的
+    #   代理字段读取一律拒绝产出。窄闸=闸绿机毁，这条是被三个架次教会的。
+    sys.path.insert(0, HERE)
+    cf = load("check_proxy_fields", os.path.join(HERE, "check_proxy_fields.py"))
+    all_hits = cf.scan_text(src)
+    unsafe = [h for h in all_hits if not h[3] and h[1] not in cf.SAFE_FIELDS]
+    for n, f, s, _gd in unsafe:
+        why = "该字段已知不可读" if f in cf.KNOWN_BAD else "无实测可读证据"
+        probs.append("全文件第 %d 行代理裸读 %s（%s）：%s" % (n, f, why, s[:70]))
+
     # 调用点必须有 pcall 围栏（观测不得打死 TEL）
     k = src.find("local function _appr_log")
     if k < 0:
@@ -185,8 +246,12 @@ def check_proxy_reads(src, mirror_start_marker="local _ftmirror", mirror_end_mar
 
     if probs:
         raise SystemExit("代理裸读闸不过：\n  " + "\n  ".join(probs))
-    print("代理裸读闸过：镜像块内 %d 个 S.* 快照全部经 _g()，_appr_log 有 pcall 围栏"
-          % len([1 for l in lines if re.match(r'\s*S\.\w+\s*=', l)]))
+    print("代理裸读闸过（**全文件**）：%d 处代理字段访问 —— 白名单 %d、pcall 保护 %d、"
+          "未保护 %d；_appr_log 有 pcall 围栏"
+          % (len(all_hits),
+             len([h for h in all_hits if h[1] in cf.SAFE_FIELDS]),
+             len([h for h in all_hits if h[3]]),
+             len(unsafe)))
 
 
 def check_definition_order(src):
@@ -295,6 +360,12 @@ def main():
 
     addon_path = os.path.join(HERE, "telemetry-addon.lua")
     src = io.open(addon_path, encoding="utf-8").read()
+
+    # ★加固既有 addon 里的代理裸读（幂等）。2026-09-27 事故：`:805 craft.Controls.VTOL`
+    #   是**既有 FT8 复算代码**里的裸读（非镜像块），长期被 FT_ONLY/条件门挡着没执行到；
+    #   挂上 _appr_log() 后执行路径改变 ⇒ 它每帧抛错 ⇒ **整个 update() 中断、TEL/APPR 全零**。
+    #   必须在注入前先把这类裸读改掉，否则每次重建都会把 bug 带回来。
+    src, hardened = harden_proxy_reads(src)
 
     # 幂等：先剥掉上一次的注入块（以标记注释界定）
     src = re.sub(r"\n-- ==== 面板镜像（自动生成.*?-- ==== /面板镜像 ====\n", "\n", src, flags=re.S)
