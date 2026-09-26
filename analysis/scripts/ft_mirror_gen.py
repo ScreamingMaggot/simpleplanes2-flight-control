@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""从 ft_ta2_patch 的 PANEL 生成 Lua 镜像（**同一份式子**，同步由构造保证）。
+
+用户 2026-09-27 的核心痛点：
+  setter 值无法写日志；Label 只能人眼读数 ⇒ 样本离散、耗时、易误判。
+本模块的答案：**读不到就复算**（telemetry-addon.lua 的 FT8 已有成功先例），
+且**不手抄**——由生成器从 PANEL 机械翻译 ⇒ 从根上消灭"镜像与面板错位"
+（ftlite_probe 的 ALARM 镜像就是被手抄错位坑过的）。
+
+用法：
+  python ft_mirror_gen.py            # 默认只镜像进近关键量（M3/M4 用）
+  python ft_mirror_gen.py --all      # 全量 456 条
+  python ft_mirror_gen.py --out X.lua
+"""
+import argparse
+import importlib.util
+import io
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ft_to_lua as T   # noqa: E402
+
+
+def load_patch():
+    """载入 ft_ta2_patch（唯一真源），拿到 PANEL 与执行器式。"""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ft_ta2_patch.py")
+    spec = importlib.util.spec_from_file_location("ft_ta2_patch", p)
+    m = importlib.util.module_from_spec(spec)
+    saved = sys.argv[:]
+    sys.argv = [sys.argv[0]]      # 防止把 --all 之类传给它的顶层参数解析
+    try:
+        spec.loader.exec_module(m)
+    finally:
+        sys.argv = saved
+    return m
+
+
+# ── 镜像范围 ────────────────────────────────────────────────────────────────
+# M3/M4（进近/航段/盘旋/五边）的关键内部量。全是几何+比较+少量平滑 ⇒ 可精确镜像。
+# 顺序无关（求值按面板自身顺序），但列在此处便于人读。
+MIRROR_KEYS = [
+    # 识别与选择链（选哪条跑道）
+    "SD", "LT", "TLA", "HDG", "BRG", "rwyOk", "rwyPri", "SLK",
+    # M3 点目标识别 + 航段几何（**这是崩掉六版的那一块**）
+    "DS0", "BG0",
+    # 航迹/风/横偏
+    "trkNow", "trkGd", "trkUse", "CRAB", "XW", "HW", "xtrk", "trkEr",
+    "Rturn", "LEAD", "bankTrk",
+    # 垂直环（v2.32~34 最贵的教训：看不见 vsCmd/cmdThe 就别改）
+    "altTgt", "tanG", "fldE", "htExcess", "vsLine", "vsCmd", "vsErr", "vsInt",
+    "cmdTheF_P", "cmdTheF_I", "cmdTheF", "cmdThe",
+    # 横向指令
+    "cmdPhi", "phiCmdF", "phiCmd",
+    # 能量环（油门/减速板/反推三通道）
+    "VAPP", "airFly", "gndIdle", "thrErr", "thrInt", "thrPath", "thrPI", "thrCmd", "thrNow",
+    "spdBrk", "revOn",
+    # 构型
+    "appr", "gearCmd", "brkT", "brkLvl", "brkCmd", "gearUp", "lgWarn",
+    # 门控
+    "boot", "airb", "hold", "RCAP", "vsLim", "airEver",
+]
+
+# 镜像**必须排除**的量：含 ActivateN 或依赖面板上下文读不到的名字 ⇒ 与真值必然不同，
+# 混进日志会制造假证据（比没有数据更坏）。
+MIRROR_BAN = {"SLK", "thrNow"}
+
+
+def build(panel, keys, all_keys=False):
+    exprs = dict(panel)
+    order = [n for n, _ in panel]
+    if all_keys:
+        sel = order
+    else:
+        sel = [k for k in order if k in set(keys)]
+    sel_set = set(sel)
+
+    # 依赖闭包：镜像一条，它引用的自定义 setter 也得镜像（否则 V.x 是 nil）。
+    # 反复迭代到不动点 —— 这是"必须给出全套依赖"的机械化版本，防手漏。
+    changed = True
+    while changed:
+        changed = False
+        for n in list(sel_set):
+            for tok in re.findall(r"[A-Za-z_]\w*", exprs.get(n, "")):
+                if tok in T.FT_BUILTIN or tok in sel_set or tok not in exprs:
+                    continue
+                if re.match(r"(?i)^activate\d+$", tok):
+                    continue
+                sel_set.add(tok)
+                changed = True
+
+    sel = [n for n in order if n in sel_set]
+
+    # ── 逐条翻译。有状态函数已由翻译器**内联**成 `_rate(...)`/`_sum(...)`/`_smooth(...)`
+    #    调用（自包含：内部更新状态并返回）⇒ 每条 setter 恰好一条赋值语句，
+    #    不存在"更新语句与赋值语句互相覆盖"的旧 bug。 ──
+    lines = []
+    n_state = 0
+    for n in sel:
+        lua, st, _aud = T.transpile_full(exprs[n], n)
+        lines.append((n, lua))
+        n_state += len(st)
+    # 依赖闭包后仍引用未镜像名字 = 闭包有洞，显式炸掉，不要留 nil 上机。
+    for n, lua in lines:
+        for tok in re.findall(r"V\.(\w+)", lua) + re.findall(r"""V\[['"](\w+)['"]\]""", lua):
+            if tok not in sel_set:
+                raise T.TranspileError("镜像 %s 引用了未镜像的 %s（闭包有洞）" % (n, tok))
+    return sel, lines, n_state
+
+
+def render(panel, keys, all_keys=False, tpl_path=None):
+    """产出完整的 Lua 镜像源串。"""
+    if tpl_path is None:
+        tpl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "ft_mirror_runtime.lua.tpl")
+    tpl = io.open(tpl_path, encoding="utf-8").read()
+
+    # 降级安全性机械门（类型推断，不靠人眼）：本项目为"静默错值"付过 6 个架次。
+    bad, _flagged = T.audit_panel_bool_conditions(panel)
+    if bad:
+        raise T.TranspileError("三元降级不安全（条件非布尔）：%s" % (bad[:5],))
+
+    sel, lines, n_state = build(panel, keys, all_keys)
+
+    # 求值体：按面板/依赖顺序，每条一条赋值。有状态调用已内联在式子里。
+    ev = "\n".join('  V["%s"] = %s' % (n, lua) for n, lua in lines)
+    ev = "-- 有状态调用点（rate/sum/smooth）共 %d 个，各有独立状态格\n%s" % (n_state, ev)
+
+    out = tpl.replace("__MIRROR_EVAL__", ev)
+    out = out.replace("__MIRROR_BODY__", "-- （内置量快照已在 M.step 顶部填写，无需额外 body）")
+    return out, sel
+
+
+def check_lua_syntax(src, label):
+    """用**真 Lua 解析器**（luaparser，build_patch.py 同款闸门）静态校验产出。
+
+    为什么必须做：镜像由程序生成、又直接进游戏 Lua 沙箱，语法错会让 **整个 MFD 静默瘫痪**
+    （telemetry-addon 全废 = 我们又回到"什么都看不见"）。生成即校验，不靠人眼。
+    """
+    try:
+        from luaparser import ast as _ast
+    except ImportError:
+        print("WARN: 未装 luaparser，跳过 Lua 语法闸（建议 pip install luaparser）")
+        return
+    try:
+        _ast.parse(src)
+    except Exception as e:
+        raise SystemExit("LUA 语法闸不过（%s）：%s" % (label, e))
+    print("Lua 语法闸过（luaparser）: %s" % label)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--all", action="store_true", help="镜像全部面板 setter")
+    ap.add_argument("--keys", default="", help="逗号分隔的镜像键（覆盖默认集）")
+    ap.add_argument("--out", default="ft_mirror.lua")
+    args = ap.parse_args()
+
+    m = load_patch()
+    keys = set(MIRROR_KEYS)
+    if args.keys:
+        keys = set(k.strip() for k in args.keys.split(",") if k.strip())
+    keys -= MIRROR_BAN
+
+    lua, sel = render(m.PANEL, keys, args.all)
+    check_lua_syntax(lua, args.out)
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.out)
+    io.open(out, "w", encoding="utf-8").write(lua)
+    print("镜像 %d/%d 条 -> %s" % (len(sel), len(m.PANEL), out))
+    print("含：", ", ".join(sel[:24]), "..." if len(sel) > 24 else "")
+
+
+if __name__ == "__main__":
+    main()

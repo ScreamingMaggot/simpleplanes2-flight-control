@@ -13,6 +13,14 @@ __pycache__/
 *.bak
 .DS_Store
 
+# 面板镜像链的生成物（SC-6 v2.36；一键重建：python analysis/scripts/run_all_gates.py）
+#   注意：**telemetry-addon.lua 本身入库**（它是真源，且被 build_patch.py 读取）；
+#   被 --inplace 注入后的同一文件也入库——它带镜像、正是发货态；
+#   .premirror 是注入前的快照，属可重建产物，不入库。
+analysis/scripts/ft_mirror.lua
+analysis/mfd-lua/telemetry-addon.mirrored.lua
+analysis/mfd-lua/*.premirror
+
 # LaTeX 中间产物
 *.aux
 *.out

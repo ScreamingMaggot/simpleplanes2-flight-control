@@ -1441,3 +1441,100 @@ cid=47708 数据（杆量=0 ⇒ hold=1，律有权限）：全程 `pa≈+0.6°`�
 
 用户"回退吧，我已无语"。`git checkout 60fddc7 -- ft_ta2_patch.py` 恢复（v2.31.6：五边 + 油门全交律 + thrNow/TH + htExcess + 跑道锁定；含 cmdThe 旧地板 `clamp(0.9·(0−vs−1.5))`）。--apply 指纹 `a58417bb`，面板 456；手摆件/字号未动。
 **教训**：v2.32/33/34 我在**看不见垂直环内部量(vsCmd/cmdThe)**的情况下改，归因反复错、还把 v2.34 改出了~~1Hz~~俯仰极限环。**垂直环要调，必须先挂内部读数（闭环量不可见先上读数再改律）。**
+
+## v2.36（2026-09-27）**解决"setter 看不见"这个元问题：面板→Lua 自动镜像 + APPR 落盘**
+
+**用户点破的真问题（本轮出发点）**：setter 值**没有任何落盘通道**——FT 无 print、
+CraftProxy 无变量袋、Label 只能人眼读数 ⇒ 样本离散、耗时、易误判。
+"看不见内部量"正是 v2.32~34 三刀归因错的根，也是 M3/M4 六版连改失败后无法定位的原因。
+
+**解法＝复算，但不手抄**（`telemetry-addon.lua:24-33` 的 FT8 已有先例，本轮把它做成基础设施）：
+
+| 新文件 | 职责 |
+|---|---|
+| `analysis/scripts/ft_to_lua.py` | **FT 表达式 → Lua 的机械翻译器**（递归下降、全括号化；`=`→`==`、`&`→`and`、`A?B:C`→`(A) and (B) or (C)`；三角按度/弧度精确对映） |
+| `analysis/scripts/ft_mirror_gen.py` | 从 `ft_ta2_patch.PANEL` **同一份式子**产出 Lua 镜像 + 依赖闭包；带 luaparser 语法闸 |
+| `analysis/scripts/verify_mirror.py` | **双路径逐点交叉验证**：把生成物再解释一遍，与"FT 原式按 FT 语义求值"在同批状态上比对 |
+| `analysis/mfd-lua/build_mirror_addon.py` | 把镜像拼进 `telemetry-addon.lua`，每帧打一行 `APPR`（38 列进近内部量） |
+
+**同步由构造保证**：镜像与面板出自同一份 `PANEL` ⇒ 从根上消灭"手抄镜像错位"
+（`ftlite_probe` 的 ALARM 镜像就是被这个坑过，注释里写着"差值即烘焙错位"）。
+
+**验证结果（`verify_mirror.py`，退出码 0）**：22 个目标 × 400 样本 = **8800 次逐点比对全一致**，
+含 M3/M4 全部关键量：`SD/LT/TLA/HDG/BRG/BG0/DS0/xtrk/trkEr/trkEr/LEAD/bankTrk/phiCmd/
+htExcess/altTgt/vsCmd/vsErr/thrCmd/spdBrk`；另 `verify_stateful()` 按 platform-facts §1
+钉死 `sum/rate/smooth` 三原语语义。
+
+**过程中抓到的真 bug（都被交叉验证逮住，值得记）**：
+1. **`atan2` 实参对调** —— 我写成 `math.atan({1},{0})`，`BG0` 全 400 样本不一致；FT `atan2(y,x)` ≡ Lua `math.atan(y,x)`，**顺序相同不交换**。
+2. **`math.deg` 双重转换** —— `math.atan` 出弧度须包一层 deg，我漏/多包 ⇒ 差 57.3 倍。
+3. **有状态函数拆成两条语句** ⇒ ① `atan2(rate(Lon),rate(Lat))` 两个 rate 先后写同一变量、前者被覆盖（退化成只剩 rate(Lat)）；② 有状态 setter 被"更新语句+赋值语句"各写一次。**改为内联调用**（每个调用点独立状态格，表达式即最终值）。
+4. **词法作用域**：镜像/`_appr_log` 定义在 `update()` **之后** ⇒ 里面的调用全是 nil、每帧报错。luaparser **查不出**这种错 ⇒ 另加"定义行号必须早于使用行号"的闸。
+5. **APPR 表头从未打印**（CSV 无列名）⇒ 加"表头列数＝格式符数−2＝取数列数"的完整性闸。
+
+**新增三道生成期闸**（不靠人眼，全部机械）：luaparser 语法闸 / 词法作用域闸 / APPR 行完整性闸。
+
+**用法**：
+```
+python analysis/scripts/ft_mirror_gen.py          # 生成镜像 + 语法闸
+python analysis/scripts/verify_mirror.py          # 交叉验证（退出码 0 = 过）
+python analysis/mfd-lua/build_mirror_addon.py     # 产出 telemetry-addon.mirrored.lua
+python analysis/mfd-lua/build_patch.py --apply    # 打进游戏（需冷启动）
+```
+
+**已知偏差（读 APPR 数据时必须知道，已写进生成物文件头）**：
+① 有状态量（`sum`/`smooth`/`rate`）从**镜像启用那帧**起算，面板的状态可能更早建立
+  ⇒ 头几秒可能不同，**看稳态段**或"开镜像后重开一局"；
+② 镜像里 `Activate1..8` **恒置 0**（setter 面板读不到，platform-facts §28/29）
+  ⇒ `SLK`（进 7 门）在 APPR 里**恒 −1**，与真面板必然不同——**这一列不能当真相用**；
+③ 镜像**只读不写轴**，绝不参与控制（与 FT_ONLY 纪律一致）。
+
+**意义**：这一条修的不是"某条律"，而是**验证回路本身**。此前"离线双例通过"之所以不算数
+（M3 六版连败的根），是因为 `approach_sim.py` 只是运动学脚本、**FT 律的转向响应根本没进回路**；
+现在有了镜像 + 逐点比对，"我写的这条式子到底算出了什么"第一次变成**可离线审计、可落盘回放**的事实。
+
+## v2.36.1（2026-09-27）接线闭合：parser 双流 + 生成物契约闸 + 一键六闸
+
+**发现的两个"静默断链"（都不是 Lua 语法错，luaparser 查不出，会白飞一整局）**：
+1. **`build_patch.py` 读的是 `telemetry-addon.lua`**，而该文件里 `APPR/_ftmirror` 零命中
+   ⇒ 直接 `--apply` 会**不带镜像发货**、APPR 一行都没有。已加提示闸（缺镜像时打印醒目告警，
+   不阻断——镜像是可选观测、不是发货前提）。
+2. **数据行漏了 `APPR,` 前缀**（第一版只有表头是 `APPRHDR`，数据行是裸 `%d,%.3f,…`）
+   ⇒ `parse_telemetry.py` 靠**行首标记**分流，永远匹配不到 ⇒ **整条流静默消失**。
+   已修，并加"数据行前缀闸"（生成期机械校验，且已用"故意改坏→闸必须红"反向验证过）。
+
+**parser 改造（`parse_telemetry.py` v3）**：
+- 双流表驱动（`STREAMS = [("TEL,",…), ("APPR,",…)]`），列名与 Lua 表头**逐字对齐**；
+- **两流各自成 csv，绝不合并**——采样率不同（TEL 2 分频、APPR 6 分频），
+  合并会造出**假等间隔**，任何按 `dt` 的分析都会错；
+- 输出 `telemetry.cidNN[.runK].csv` 与 `telemetry.appr.cidNN[.runK].csv` 并列；
+- 两流的"时间戳回退=新架次"**各自独立判定**（MFD 是 RoundRobin 调度，
+  某条流可能先停后启，共用 `last_t` 会误切架次）；
+- 列数不符的行一律丢弃（防截断/错位行混入）；
+- 无 APPR 行时**明确提示**该怎么补（而不是静默什么都不说）。
+
+**新增两道测试 + 一键跑全套**：
+| 文件 | 作用 |
+|---|---|
+| `test_parse_telemetry.py` | 合成日志自测：多 cid / 架次切分 / 截断行剔除 / 表头逐字核对（`SELFTEST: PASS`） |
+| `test_appr_contract.py` | **生成物↔parser 契约闸**：按生成物的格式串捏一行 APPR，喂 parser，**逐列**核对回来 |
+| `run_all_gates.py` | 一键跑六道闸（镜像语法→交叉验证→注入→构建→parser→契约），任一非零即停 |
+
+**本轮跑通结果**：六道闸全过（`FINAL exit=0`），其中契约闸端到端验证
+`APPR,777,123.456,100.00,…` 38 列逐列一致、`cid/t` 无错位。
+
+**交付顺序（顺序反了就白飞一局）**：
+```
+python analysis/scripts/run_all_gates.py          # 六闸全过
+python analysis/mfd-lua/build_patch.py --apply    # 写进游戏本体（自动备份 .orig）
+冷启动游戏 → 机库出击（**不是设计器试飞**）→ 一局守卫飞
+python analysis/scripts/parse_telemetry.py        # 出 telemetry*.csv + telemetry.appr*.csv
+```
+⚠ `build_mirror_addon.py --inplace` **已执行**（`telemetry-addon.lua` 现带镜像，快照在
+`.premirror`）。若重跑 `--inplace` 是幂等的（先剥旧注入块再插）；发货前跑一次 `run_all_gates.py` 即可。
+
+**读数据时的两条硬约束（已写进生成物文件头 + parser 提示）**：
+① `SLK` 列**恒 −1、不是真相**；② 含 sum/smooth/rate 的量（`vsCmd/altTgt/vsErr/thrCmd/spdBrk`）
+从**镜像启用那帧**起算 ⇒ **只看稳态段**。
+
+

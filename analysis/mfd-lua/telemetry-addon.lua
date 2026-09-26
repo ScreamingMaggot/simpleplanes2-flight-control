@@ -3,6 +3,651 @@
 -- 输出行格式：TEL,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw
 -- 注意：视野外/飞机被剔除时 MFD 可能停更，采样间隔以每行自带的 t 为准（不要假设等间隔）
 
+
+
+
+
+
+
+-- ==== 面板镜像（自动生成：ft_mirror_gen.py）====
+local _ftmirror = (function()
+--[[ ==========================================================================
+  FT 面板镜像运行时（**自动生成，请勿手改** —— 由 analysis/scripts/ft_mirror_gen.py 产出）
+
+  用途：面板 setter 由游戏表达式引擎求值，**从不写进 Player.log**；CraftProxy 无变量袋，
+        Lua 读不到。Label 是唯一窗口 ⇒ 只能人眼读数 ⇒ 样本离散易误判（用户 2026-09-27 点破）。
+        本文件把面板**同一条式子**用 Lua 复算，把内部量按 APPR 行打进日志 ⇒ 全自动、每帧、可回放。
+
+  语义忠实度（照 platform-facts §1 源码定义，逐条对齐）：
+        sum(x)      = value += x*dt
+        rate(x)     = (x − last)/dt            （首帧 0）
+        smooth(x,t) = MoveTowards(last, x, t*dt)（首帧 = x）
+        PID(T,C,p,i,d) = p·e + i·Σe·dt + d·(C_last−C)/dt，e = T−C
+  三角函数按**度**（FT 约定），atan2(y,x) 出参为度。
+
+  ⚠ 已知偏差（**读数据时必须知道**）：
+    1. 有状态量（sum/smooth/rate）从**本镜像启用那一刻**起算；面板的状态可能更早建立
+       ⇒ 头几秒内两者可能不同。看数据时以稳态段为准，或保证"开镜像后重开一局"。
+    2. dt 用 craft.Time 差分（同 telemetry-addon 既有做法）；实验/暂停会给出异常 dt，已钳。
+    3. 本镜像**只读不写轴**，绝不参与控制（与 FT_ONLY 纪律一致）。
+========================================================================== ]]
+
+local M = {}          -- 镜像状态表（每个 rate/sum/smooth 一格）
+local V = {}          -- 面板 setter 值快照（按面板顺序求值后落表）
+local S = {}          -- FT 内置量快照（每帧从 craft 代理填）
+local _prev = {}      -- 上一帧的内置量（给 rate 用）
+local _init = false   -- 首帧标志（rate 首帧 0、smooth 首帧=x）
+
+-- ── FT 语义 shim ─────────────────────────────────────────────────────────
+local function _rate(key, x, dt)
+  local last = M[key]
+  M[key] = x
+  if last == nil then return 0 end
+  if dt <= 0 then return 0 end
+  return (x - last) / dt
+end
+
+local function _sum(key, x, dt)
+  M[key] = (M[key] or 0) + x * dt
+  return M[key]
+end
+
+local function _smooth(key, x, t, dt)
+  local last = M[key]
+  if last == nil then M[key] = x; return x end
+  local mx = t * dt
+  local d = x - last
+  if d > mx then d = mx elseif d < -mx then d = -mx end
+  M[key] = last + d
+  return M[key]
+end
+
+local function _pid(key, T, C, p, i, d, dt)
+  local st = M[key]
+  if st == nil then st = {s = 0, last = C}; M[key] = st end
+  local e = T - C
+  st.s = st.s + e * dt
+  local dd = 0
+  if dt > 0 then dd = (C - st.last) / dt end
+  st.last = C
+  return p * e + i * st.s + d * dd
+end
+
+-- 三角（度）
+local function _rad(x) return x * math.pi / 180 end
+local function _deg(x) return x * 180 / math.pi end
+local function _wrap180(a) return (a + 180) % 360 - 180 end
+
+--[[ 由生成器注入：S.xxx 取值源与 V.xxx 求值式（见 ft_mirror_gen.py 输出）]]
+-- （内置量快照已在 M.step 顶部填写，无需额外 body）
+
+--[[ 每帧调用一次：填内置量 → 按面板顺序求值 → 返回 V 表（供日志取用） ]]
+function M.step()
+  local now = craft.Time
+  local dt = _prev.t and (now - _prev.t) or 0
+  _prev.t = now
+  if dt <= 0 or dt > 0.5 then dt = 0.05 end     -- 暂停/实验跳变钳位（同 telemetry-addon 纪律）
+  S.dt = dt
+  S.Time = now
+  local c = craft
+  local ctl = craft.Controls
+  S.Altitude = c.Altitude
+  S.AltitudeAgl = c.AltitudeAgl
+  S.AngleOfAttack = c.AngleOfAttack
+  S.AngleOfSlip = c.AngleOfSlip
+  S.Fuel = c.Fuel
+  S.GForce = c.GForce
+  S.GS = c.GS
+  S.Heading = c.Heading
+  S.IAS = c.IAS
+  S.Latitude = c.Latitude
+  S.Longitude = c.Longitude
+  S.PitchAngle = c.PitchAngle
+  S.PitchRate = c.PitchRate
+  S.RollAngle = c.RollAngle
+  S.RollRate = c.RollRate
+  S.TAS = c.TAS
+  S.VerticalG = c.VerticalG
+  S.YawRate = c.YawRate
+  -- 控制轴（**飞行员轴**，与 FT 零件上下文同名）
+  S.Pitch = ctl.Pitch
+  S.Roll = ctl.Roll
+  S.Yaw = ctl.Yaw
+  S.Throttle = ctl.Throttle
+  S.Trim = ctl.Trim
+  S.Brake = ctl.Brake
+  S.VTOL = ctl.VTOL or 0
+  S.Flaps = ctl.Flaps or 0
+  S.LandingGear = ctl.LandingGear or 0
+  S.GearDown = ctl.LandingGearDown and 1 or 0
+  -- Activate1..8：**面板上下文读不到**（platform-facts §28/29），镜像按同规则置 0
+  --   ⇒ 镜像里凡用 ActivateN 的量（SLK 的进7门）与真面板**必然不同**，读 APPR 行时要记住。
+  --   本镜像的处置：从零件层可读物无通道 ⇒ 用 Flaps 代主电（与 SC-5 定案一致），另打 ACT 列。
+  local fl = 0
+  pcall(function() fl = ctl.Flaps or 0 end)
+  for i = 1, 8 do S["Activate" .. i] = 0 end
+  -- 有状态调用点（rate/sum/smooth）共 23 个，各有独立状态格
+  V["boot"] = math.max(0, math.min(1, ((S.Time * 0.25))))
+  V["cmdPhi"] = ((-60) * S.Roll)
+  V["vs"] = _rate('vs__st0', S.Altitude, dt)
+  V["airb"] = math.max(0, math.min(1, ((((S.AltitudeAgl - 5)) / 5))))
+  V["hold"] = _smooth('hold__st0', ((((((math.abs(S.Roll) > 0.05)) or ((math.abs(S.Pitch) > 0.05))))) and (0) or (1)), 2, dt)
+  V["RCAP"] = ((S.IAS * S.IAS) / 13.5)
+  V["vsLim"] = ((((S.IAS > 42)) and (20) or (5)))
+  V["airEver"] = math.max(0, math.min(1, (_sum('airEver__st0', ((((S.AltitudeAgl > 30))) and (1) or (0)), dt))))
+  V["SD0"] = (((((-5540.0) - S.Latitude)) * 0.984808) + (((12797.0 - S.Longitude)) * 0.173648))
+  V["LT0"] = ((((S.Latitude - (-5540.0))) * 0.173648) - (((S.Longitude - 12797.0)) * 0.984808))
+  V["SD1"] = (((((-6180.0) - S.Latitude)) * 0.766044) + (((12122.0 - S.Longitude)) * 0.642788))
+  V["LT1"] = ((((S.Latitude - (-6180.0))) * 0.642788) - (((S.Longitude - 12122.0)) * 0.766044))
+  V["SD2"] = (((((-4500.0) - S.Latitude)) * (-0.984808)) + (((12980.0 - S.Longitude)) * (-0.173648)))
+  V["LT2"] = ((((S.Latitude - (-4500.0))) * (-0.173648)) - (((S.Longitude - 12980.0)) * (-0.984808)))
+  V["SD3"] = (((((-5160.0) - S.Latitude)) * (-0.766044)) + (((12978.0 - S.Longitude)) * (-0.642788)))
+  V["LT3"] = ((((S.Latitude - (-5160.0))) * (-0.642788)) - (((S.Longitude - 12978.0)) * (-0.766044)))
+  V["SD4"] = (((((-38878.3) - S.Latitude)) * 0.642788) + (((6533.0 - S.Longitude)) * 0.766044))
+  V["LT4"] = ((((S.Latitude - (-38878.3))) * 0.766044) - (((S.Longitude - 6533.0)) * 0.642788))
+  V["SD5"] = (((((-37451.0) - S.Latitude)) * (-0.642788)) + (((8234.0 - S.Longitude)) * (-0.766044)))
+  V["LT5"] = ((((S.Latitude - (-37451.0))) * (-0.766044)) - (((S.Longitude - 8234.0)) * (-0.642788)))
+  V["SD6"] = (((((-38872.0) - S.Latitude)) * 0.173648) + (((6204.0 - S.Longitude)) * 0.984808))
+  V["LT6"] = ((((S.Latitude - (-38872.0))) * 0.984808) - (((S.Longitude - 6204.0)) * 0.173648))
+  V["SD7"] = (((((-38681.0) - S.Latitude)) * (-0.173648)) + (((7288.0 - S.Longitude)) * (-0.984808)))
+  V["LT7"] = ((((S.Latitude - (-38681.0))) * (-0.984808)) - (((S.Longitude - 7288.0)) * (-0.173648)))
+  V["SD8"] = (((((-29883.0) - S.Latitude)) * 0.707107) + (((12873.0 - S.Longitude)) * 0.707107))
+  V["LT8"] = ((((S.Latitude - (-29883.0))) * 0.707107) - (((S.Longitude - 12873.0)) * 0.707107))
+  V["SD9"] = (((((-27887.0) - S.Latitude)) * (-0.707107)) + (((15064.0 - S.Longitude)) * (-0.707107)))
+  V["LT9"] = ((((S.Latitude - (-27887.0))) * (-0.707107)) - (((S.Longitude - 15064.0)) * (-0.707107)))
+  V["SD10"] = (((((-26945.0) - S.Latitude)) * (-1.000000)) + (((14477.0 - S.Longitude)) * 0.000000))
+  V["LT10"] = ((((S.Latitude - (-26945.0))) * 0.000000) - (((S.Longitude - 14477.0)) * (-1.000000)))
+  V["SD11"] = (((((-2330.0) - S.Latitude)) * 0.965926) + (((4380.9 - S.Longitude)) * (-0.258819)))
+  V["LT11"] = ((((S.Latitude - (-2330.0))) * (-0.258819)) - (((S.Longitude - 4380.9)) * 0.965926))
+  V["SD12"] = (((((-2556.2) - S.Latitude)) * (-0.707107)) + (((4340.0 - S.Longitude)) * (-0.707107)))
+  V["LT12"] = ((((S.Latitude - (-2556.2))) * (-0.707107)) - (((S.Longitude - 4340.0)) * (-0.707107)))
+  V["G0"] = ((((((V.SD0 > (-50))) or ((((V.SD0 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT0) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD0 < 15000)))
+  V["G1"] = ((((((V.SD1 > (-50))) or ((((V.SD1 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT1) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD1 < 15000)))
+  V["G2"] = ((((((V.SD2 > (-50))) or ((((V.SD2 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT2) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD2 < 15000)))
+  V["G3"] = ((((((V.SD3 > (-50))) or ((((V.SD3 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT3) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD3 < 15000)))
+  V["G4"] = ((((((V.SD4 > (-50))) or ((((V.SD4 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT4) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD4 < 15000)))
+  V["G5"] = ((((((V.SD5 > (-50))) or ((((V.SD5 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT5) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD5 < 15000)))
+  V["G6"] = ((((((V.SD6 > (-50))) or ((((V.SD6 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT6) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD6 < 15000)))
+  V["G7"] = ((((((V.SD7 > (-50))) or ((((V.SD7 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT7) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD7 < 15000)))
+  V["G8"] = ((((((V.SD8 > (-50))) or ((((V.SD8 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT8) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD8 < 15000)))
+  V["G9"] = ((((((V.SD9 > (-50))) or ((((V.SD9 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT9) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD9 < 15000)))
+  V["G10"] = ((((((V.SD10 > (-50))) or ((((V.SD10 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT10) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD10 < 15000)))
+  V["G11"] = ((((((V.SD11 > (-50))) or ((((V.SD11 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT11) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD11 < 15000)))
+  V["G12"] = ((((((V.SD12 > (-50))) or ((((V.SD12 > (-3500))) and ((S.AltitudeAgl < 100)))))) and ((math.abs(V.LT12) < math.max(900, math.min((2 * V.RCAP), 1800))))) and ((V.SD12 < 15000)))
+  V["BG0"] = (10 + math.deg(math.atan((0 - V.LT0), V.SD0)))
+  V["DS0"] = math.sqrt(((V.SD0 * V.SD0) + (V.LT0 * V.LT0)))
+  V["BG1"] = (40 + math.deg(math.atan((0 - V.LT1), V.SD1)))
+  V["DS1"] = math.sqrt(((V.SD1 * V.SD1) + (V.LT1 * V.LT1)))
+  V["BG2"] = (190 + math.deg(math.atan((0 - V.LT2), V.SD2)))
+  V["DS2"] = math.sqrt(((V.SD2 * V.SD2) + (V.LT2 * V.LT2)))
+  V["BG3"] = (220 + math.deg(math.atan((0 - V.LT3), V.SD3)))
+  V["DS3"] = math.sqrt(((V.SD3 * V.SD3) + (V.LT3 * V.LT3)))
+  V["BG4"] = (50 + math.deg(math.atan((0 - V.LT4), V.SD4)))
+  V["DS4"] = math.sqrt(((V.SD4 * V.SD4) + (V.LT4 * V.LT4)))
+  V["BG5"] = (230 + math.deg(math.atan((0 - V.LT5), V.SD5)))
+  V["DS5"] = math.sqrt(((V.SD5 * V.SD5) + (V.LT5 * V.LT5)))
+  V["BG6"] = (80 + math.deg(math.atan((0 - V.LT6), V.SD6)))
+  V["DS6"] = math.sqrt(((V.SD6 * V.SD6) + (V.LT6 * V.LT6)))
+  V["BG7"] = (260 + math.deg(math.atan((0 - V.LT7), V.SD7)))
+  V["DS7"] = math.sqrt(((V.SD7 * V.SD7) + (V.LT7 * V.LT7)))
+  V["BG8"] = (45 + math.deg(math.atan((0 - V.LT8), V.SD8)))
+  V["DS8"] = math.sqrt(((V.SD8 * V.SD8) + (V.LT8 * V.LT8)))
+  V["BG9"] = (225 + math.deg(math.atan((0 - V.LT9), V.SD9)))
+  V["DS9"] = math.sqrt(((V.SD9 * V.SD9) + (V.LT9 * V.LT9)))
+  V["BG10"] = (180 + math.deg(math.atan((0 - V.LT10), V.SD10)))
+  V["DS10"] = math.sqrt(((V.SD10 * V.SD10) + (V.LT10 * V.LT10)))
+  V["BG11"] = (345 + math.deg(math.atan((0 - V.LT11), V.SD11)))
+  V["DS11"] = math.sqrt(((V.SD11 * V.SD11) + (V.LT11 * V.LT11)))
+  V["BG12"] = (225 + math.deg(math.atan((0 - V.LT12), V.SD12)))
+  V["DS12"] = math.sqrt(((V.SD12 * V.SD12) + (V.LT12 * V.LT12)))
+  V["K0"] = ((((V.G0) and ((((((V.SD0 < 0)) and ((math.abs(V.LT0) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG0) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (10) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS0 / 50)))))))))
+  V["PR0"] = ((_smooth('PR0__st0', ((((math.abs(((( (S.Heading) - (V.BG0) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP0"] = (((V.K0 and V.PR0) and ((V.DS0 < 9999999))))
+  V["PS0"] = (((V.KP0) and (V.SD0) or (9999999)))
+  V["PL0"] = (((V.KP0) and (V.LT0) or ((-9999999))))
+  V["PT0"] = (((V.KP0) and ((10 + (0.0524 * math.max(V.SD0, 0)))) or ((-9999999))))
+  V["PD0"] = (((V.KP0) and (10) or (0)))
+  V["PP0"] = (((V.KP0) and (V.BG0) or (9999999)))
+  V["PU0"] = (((V.KP0) and (1) or (0)))
+  V["PI0"] = (((V.KP0) and (0) or ((-1))))
+  V["KF0"] = ((V.K0 and ((V.DS0 < 9999999))))
+  V["FS0"] = (((V.KF0) and (V.SD0) or (9999999)))
+  V["FL0"] = (((V.KF0) and (V.LT0) or ((-9999999))))
+  V["FT0"] = (((V.KF0) and ((10 + (0.0524 * math.max(V.SD0, 0)))) or ((-9999999))))
+  V["FD0"] = (((V.KF0) and (10) or (0)))
+  V["FP0"] = (((V.KF0) and (V.BG0) or (9999999)))
+  V["FU0"] = (((V.KF0) and (1) or (0)))
+  V["FI0"] = (((V.KF0) and (0) or ((-1))))
+  V["K1"] = ((((V.G1) and ((((((V.SD1 < 0)) and ((math.abs(V.LT1) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG1) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (40) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS1 / 50)))))))))
+  V["PR1"] = ((_smooth('PR1__st0', ((((math.abs(((( (S.Heading) - (V.BG1) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP1"] = (((V.K1 and V.PR1) and ((V.DS1 < V.PS0))))
+  V["PS1"] = (((V.KP1) and (V.SD1) or (V.PS0)))
+  V["PL1"] = (((V.KP1) and (V.LT1) or (V.PL0)))
+  V["PT1"] = (((V.KP1) and ((10 + (0.0524 * math.max(V.SD1, 0)))) or (V.PT0)))
+  V["PD1"] = (((V.KP1) and (40) or (V.PD0)))
+  V["PP1"] = (((V.KP1) and (V.BG1) or (V.PP0)))
+  V["PU1"] = (((V.KP1) and (1) or (V.PU0)))
+  V["PI1"] = (((V.KP1) and (1) or (V.PI0)))
+  V["KF1"] = ((V.K1 and ((V.DS1 < V.FS0))))
+  V["FS1"] = (((V.KF1) and (V.SD1) or (V.FS0)))
+  V["FL1"] = (((V.KF1) and (V.LT1) or (V.FL0)))
+  V["FT1"] = (((V.KF1) and ((10 + (0.0524 * math.max(V.SD1, 0)))) or (V.FT0)))
+  V["FD1"] = (((V.KF1) and (40) or (V.FD0)))
+  V["FP1"] = (((V.KF1) and (V.BG1) or (V.FP0)))
+  V["FU1"] = (((V.KF1) and (1) or (V.FU0)))
+  V["FI1"] = (((V.KF1) and (1) or (V.FI0)))
+  V["K2"] = ((((V.G2) and ((((((V.SD2 < 0)) and ((math.abs(V.LT2) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG2) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (190) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS2 / 50)))))))))
+  V["PR2"] = ((_smooth('PR2__st0', ((((math.abs(((( (S.Heading) - (V.BG2) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP2"] = (((V.K2 and V.PR2) and ((V.DS2 < V.PS1))))
+  V["PS2"] = (((V.KP2) and (V.SD2) or (V.PS1)))
+  V["PL2"] = (((V.KP2) and (V.LT2) or (V.PL1)))
+  V["PT2"] = (((V.KP2) and ((10 + (0.0524 * math.max(V.SD2, 0)))) or (V.PT1)))
+  V["PD2"] = (((V.KP2) and (190) or (V.PD1)))
+  V["PP2"] = (((V.KP2) and (V.BG2) or (V.PP1)))
+  V["PU2"] = (((V.KP2) and (1) or (V.PU1)))
+  V["PI2"] = (((V.KP2) and (2) or (V.PI1)))
+  V["KF2"] = ((V.K2 and ((V.DS2 < V.FS1))))
+  V["FS2"] = (((V.KF2) and (V.SD2) or (V.FS1)))
+  V["FL2"] = (((V.KF2) and (V.LT2) or (V.FL1)))
+  V["FT2"] = (((V.KF2) and ((10 + (0.0524 * math.max(V.SD2, 0)))) or (V.FT1)))
+  V["FD2"] = (((V.KF2) and (190) or (V.FD1)))
+  V["FP2"] = (((V.KF2) and (V.BG2) or (V.FP1)))
+  V["FU2"] = (((V.KF2) and (1) or (V.FU1)))
+  V["FI2"] = (((V.KF2) and (2) or (V.FI1)))
+  V["K3"] = ((((V.G3) and ((((((V.SD3 < 0)) and ((math.abs(V.LT3) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG3) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (220) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS3 / 50)))))))))
+  V["PR3"] = ((_smooth('PR3__st0', ((((math.abs(((( (S.Heading) - (V.BG3) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP3"] = (((V.K3 and V.PR3) and ((V.DS3 < V.PS2))))
+  V["PS3"] = (((V.KP3) and (V.SD3) or (V.PS2)))
+  V["PL3"] = (((V.KP3) and (V.LT3) or (V.PL2)))
+  V["PT3"] = (((V.KP3) and ((10 + (0.0524 * math.max(V.SD3, 0)))) or (V.PT2)))
+  V["PD3"] = (((V.KP3) and (220) or (V.PD2)))
+  V["PP3"] = (((V.KP3) and (V.BG3) or (V.PP2)))
+  V["PU3"] = (((V.KP3) and (1) or (V.PU2)))
+  V["PI3"] = (((V.KP3) and (3) or (V.PI2)))
+  V["KF3"] = ((V.K3 and ((V.DS3 < V.FS2))))
+  V["FS3"] = (((V.KF3) and (V.SD3) or (V.FS2)))
+  V["FL3"] = (((V.KF3) and (V.LT3) or (V.FL2)))
+  V["FT3"] = (((V.KF3) and ((10 + (0.0524 * math.max(V.SD3, 0)))) or (V.FT2)))
+  V["FD3"] = (((V.KF3) and (220) or (V.FD2)))
+  V["FP3"] = (((V.KF3) and (V.BG3) or (V.FP2)))
+  V["FU3"] = (((V.KF3) and (1) or (V.FU2)))
+  V["FI3"] = (((V.KF3) and (3) or (V.FI2)))
+  V["K4"] = ((((V.G4) and ((((((V.SD4 < 0)) and ((math.abs(V.LT4) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG4) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (50) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS4 / 50)))))))))
+  V["PR4"] = ((_smooth('PR4__st0', ((((math.abs(((( (S.Heading) - (V.BG4) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP4"] = (((V.K4 and V.PR4) and ((V.DS4 < V.PS3))))
+  V["PS4"] = (((V.KP4) and (V.SD4) or (V.PS3)))
+  V["PL4"] = (((V.KP4) and (V.LT4) or (V.PL3)))
+  V["PT4"] = (((V.KP4) and ((5 + (0.0524 * math.max(V.SD4, 0)))) or (V.PT3)))
+  V["PD4"] = (((V.KP4) and (50) or (V.PD3)))
+  V["PP4"] = (((V.KP4) and (V.BG4) or (V.PP3)))
+  V["PU4"] = (((V.KP4) and (1) or (V.PU3)))
+  V["PI4"] = (((V.KP4) and (4) or (V.PI3)))
+  V["KF4"] = ((V.K4 and ((V.DS4 < V.FS3))))
+  V["FS4"] = (((V.KF4) and (V.SD4) or (V.FS3)))
+  V["FL4"] = (((V.KF4) and (V.LT4) or (V.FL3)))
+  V["FT4"] = (((V.KF4) and ((5 + (0.0524 * math.max(V.SD4, 0)))) or (V.FT3)))
+  V["FD4"] = (((V.KF4) and (50) or (V.FD3)))
+  V["FP4"] = (((V.KF4) and (V.BG4) or (V.FP3)))
+  V["FU4"] = (((V.KF4) and (1) or (V.FU3)))
+  V["FI4"] = (((V.KF4) and (4) or (V.FI3)))
+  V["K5"] = ((((V.G5) and ((((((V.SD5 < 0)) and ((math.abs(V.LT5) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG5) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (230) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS5 / 50)))))))))
+  V["PR5"] = ((_smooth('PR5__st0', ((((math.abs(((( (S.Heading) - (V.BG5) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP5"] = (((V.K5 and V.PR5) and ((V.DS5 < V.PS4))))
+  V["PS5"] = (((V.KP5) and (V.SD5) or (V.PS4)))
+  V["PL5"] = (((V.KP5) and (V.LT5) or (V.PL4)))
+  V["PT5"] = (((V.KP5) and ((5 + (0.0524 * math.max(V.SD5, 0)))) or (V.PT4)))
+  V["PD5"] = (((V.KP5) and (230) or (V.PD4)))
+  V["PP5"] = (((V.KP5) and (V.BG5) or (V.PP4)))
+  V["PU5"] = (((V.KP5) and (1) or (V.PU4)))
+  V["PI5"] = (((V.KP5) and (5) or (V.PI4)))
+  V["KF5"] = ((V.K5 and ((V.DS5 < V.FS4))))
+  V["FS5"] = (((V.KF5) and (V.SD5) or (V.FS4)))
+  V["FL5"] = (((V.KF5) and (V.LT5) or (V.FL4)))
+  V["FT5"] = (((V.KF5) and ((5 + (0.0524 * math.max(V.SD5, 0)))) or (V.FT4)))
+  V["FD5"] = (((V.KF5) and (230) or (V.FD4)))
+  V["FP5"] = (((V.KF5) and (V.BG5) or (V.FP4)))
+  V["FU5"] = (((V.KF5) and (1) or (V.FU4)))
+  V["FI5"] = (((V.KF5) and (5) or (V.FI4)))
+  V["K6"] = ((((V.G6) and ((((((V.SD6 < 0)) and ((math.abs(V.LT6) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG6) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (80) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS6 / 50)))))))))
+  V["PR6"] = ((_smooth('PR6__st0', ((((math.abs(((( (S.Heading) - (V.BG6) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP6"] = (((V.K6 and V.PR6) and ((V.DS6 < V.PS5))))
+  V["PS6"] = (((V.KP6) and (V.SD6) or (V.PS5)))
+  V["PL6"] = (((V.KP6) and (V.LT6) or (V.PL5)))
+  V["PT6"] = (((V.KP6) and ((5 + (0.0524 * math.max(V.SD6, 0)))) or (V.PT5)))
+  V["PD6"] = (((V.KP6) and (80) or (V.PD5)))
+  V["PP6"] = (((V.KP6) and (V.BG6) or (V.PP5)))
+  V["PU6"] = (((V.KP6) and (1) or (V.PU5)))
+  V["PI6"] = (((V.KP6) and (6) or (V.PI5)))
+  V["KF6"] = ((V.K6 and ((V.DS6 < V.FS5))))
+  V["FS6"] = (((V.KF6) and (V.SD6) or (V.FS5)))
+  V["FL6"] = (((V.KF6) and (V.LT6) or (V.FL5)))
+  V["FT6"] = (((V.KF6) and ((5 + (0.0524 * math.max(V.SD6, 0)))) or (V.FT5)))
+  V["FD6"] = (((V.KF6) and (80) or (V.FD5)))
+  V["FP6"] = (((V.KF6) and (V.BG6) or (V.FP5)))
+  V["FU6"] = (((V.KF6) and (1) or (V.FU5)))
+  V["FI6"] = (((V.KF6) and (6) or (V.FI5)))
+  V["K7"] = ((((V.G7) and ((((((V.SD7 < 0)) and ((math.abs(V.LT7) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG7) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (260) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS7 / 50)))))))))
+  V["PR7"] = ((_smooth('PR7__st0', ((((math.abs(((( (S.Heading) - (V.BG7) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP7"] = (((V.K7 and V.PR7) and ((V.DS7 < V.PS6))))
+  V["PS7"] = (((V.KP7) and (V.SD7) or (V.PS6)))
+  V["PL7"] = (((V.KP7) and (V.LT7) or (V.PL6)))
+  V["PT7"] = (((V.KP7) and ((5 + (0.0524 * math.max(V.SD7, 0)))) or (V.PT6)))
+  V["PD7"] = (((V.KP7) and (260) or (V.PD6)))
+  V["PP7"] = (((V.KP7) and (V.BG7) or (V.PP6)))
+  V["PU7"] = (((V.KP7) and (1) or (V.PU6)))
+  V["PI7"] = (((V.KP7) and (7) or (V.PI6)))
+  V["KF7"] = ((V.K7 and ((V.DS7 < V.FS6))))
+  V["FS7"] = (((V.KF7) and (V.SD7) or (V.FS6)))
+  V["FL7"] = (((V.KF7) and (V.LT7) or (V.FL6)))
+  V["FT7"] = (((V.KF7) and ((5 + (0.0524 * math.max(V.SD7, 0)))) or (V.FT6)))
+  V["FD7"] = (((V.KF7) and (260) or (V.FD6)))
+  V["FP7"] = (((V.KF7) and (V.BG7) or (V.FP6)))
+  V["FU7"] = (((V.KF7) and (1) or (V.FU6)))
+  V["FI7"] = (((V.KF7) and (7) or (V.FI6)))
+  V["K8"] = ((((V.G8) and ((((((V.SD8 < 0)) and ((math.abs(V.LT8) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG8) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (45) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS8 / 50)))))))))
+  V["PR8"] = ((_smooth('PR8__st0', ((((math.abs(((( (S.Heading) - (V.BG8) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP8"] = (((V.K8 and V.PR8) and ((V.DS8 < V.PS7))))
+  V["PS8"] = (((V.KP8) and (V.SD8) or (V.PS7)))
+  V["PL8"] = (((V.KP8) and (V.LT8) or (V.PL7)))
+  V["PT8"] = (((V.KP8) and ((3 + (0.0524 * math.max(V.SD8, 0)))) or (V.PT7)))
+  V["PD8"] = (((V.KP8) and (45) or (V.PD7)))
+  V["PP8"] = (((V.KP8) and (V.BG8) or (V.PP7)))
+  V["PU8"] = (((V.KP8) and (1) or (V.PU7)))
+  V["PI8"] = (((V.KP8) and (8) or (V.PI7)))
+  V["KF8"] = ((V.K8 and ((V.DS8 < V.FS7))))
+  V["FS8"] = (((V.KF8) and (V.SD8) or (V.FS7)))
+  V["FL8"] = (((V.KF8) and (V.LT8) or (V.FL7)))
+  V["FT8"] = (((V.KF8) and ((3 + (0.0524 * math.max(V.SD8, 0)))) or (V.FT7)))
+  V["FD8"] = (((V.KF8) and (45) or (V.FD7)))
+  V["FP8"] = (((V.KF8) and (V.BG8) or (V.FP7)))
+  V["FU8"] = (((V.KF8) and (1) or (V.FU7)))
+  V["FI8"] = (((V.KF8) and (8) or (V.FI7)))
+  V["K9"] = ((((V.G9) and ((((((V.SD9 < 0)) and ((math.abs(V.LT9) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG9) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (225) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS9 / 50)))))))))
+  V["PR9"] = ((_smooth('PR9__st0', ((((math.abs(((( (S.Heading) - (V.BG9) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP9"] = (((V.K9 and V.PR9) and ((V.DS9 < V.PS8))))
+  V["PS9"] = (((V.KP9) and (V.SD9) or (V.PS8)))
+  V["PL9"] = (((V.KP9) and (V.LT9) or (V.PL8)))
+  V["PT9"] = (((V.KP9) and ((3 + (0.0524 * math.max(V.SD9, 0)))) or (V.PT8)))
+  V["PD9"] = (((V.KP9) and (225) or (V.PD8)))
+  V["PP9"] = (((V.KP9) and (V.BG9) or (V.PP8)))
+  V["PU9"] = (((V.KP9) and (1) or (V.PU8)))
+  V["PI9"] = (((V.KP9) and (9) or (V.PI8)))
+  V["KF9"] = ((V.K9 and ((V.DS9 < V.FS8))))
+  V["FS9"] = (((V.KF9) and (V.SD9) or (V.FS8)))
+  V["FL9"] = (((V.KF9) and (V.LT9) or (V.FL8)))
+  V["FT9"] = (((V.KF9) and ((3 + (0.0524 * math.max(V.SD9, 0)))) or (V.FT8)))
+  V["FD9"] = (((V.KF9) and (225) or (V.FD8)))
+  V["FP9"] = (((V.KF9) and (V.BG9) or (V.FP8)))
+  V["FU9"] = (((V.KF9) and (1) or (V.FU8)))
+  V["FI9"] = (((V.KF9) and (9) or (V.FI8)))
+  V["K10"] = ((((V.G10) and ((((((V.SD10 < 0)) and ((math.abs(V.LT10) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG10) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (180) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS10 / 50)))))))))
+  V["PR10"] = ((_smooth('PR10__st0', ((((math.abs(((( (S.Heading) - (V.BG10) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP10"] = (((V.K10 and V.PR10) and ((V.DS10 < V.PS9))))
+  V["PS10"] = (((V.KP10) and (V.SD10) or (V.PS9)))
+  V["PL10"] = (((V.KP10) and (V.LT10) or (V.PL9)))
+  V["PT10"] = (((V.KP10) and ((3 + (0.0524 * math.max(V.SD10, 0)))) or (V.PT9)))
+  V["PD10"] = (((V.KP10) and (180) or (V.PD9)))
+  V["PP10"] = (((V.KP10) and (V.BG10) or (V.PP9)))
+  V["PU10"] = (((V.KP10) and (1) or (V.PU9)))
+  V["PI10"] = (((V.KP10) and (10) or (V.PI9)))
+  V["KF10"] = ((V.K10 and ((V.DS10 < V.FS9))))
+  V["FS10"] = (((V.KF10) and (V.SD10) or (V.FS9)))
+  V["FL10"] = (((V.KF10) and (V.LT10) or (V.FL9)))
+  V["FT10"] = (((V.KF10) and ((3 + (0.0524 * math.max(V.SD10, 0)))) or (V.FT9)))
+  V["FD10"] = (((V.KF10) and (180) or (V.FD9)))
+  V["FP10"] = (((V.KF10) and (V.BG10) or (V.FP9)))
+  V["FU10"] = (((V.KF10) and (1) or (V.FU9)))
+  V["FI10"] = (((V.KF10) and (10) or (V.FI9)))
+  V["K11"] = ((((V.G11) and ((((((V.SD11 < 0)) and ((math.abs(V.LT11) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG11) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (345) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS11 / 50)))))))))
+  V["PR11"] = ((_smooth('PR11__st0', ((((math.abs(((( (S.Heading) - (V.BG11) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP11"] = (((V.K11 and V.PR11) and ((V.DS11 < V.PS10))))
+  V["PS11"] = (((V.KP11) and (V.SD11) or (V.PS10)))
+  V["PL11"] = (((V.KP11) and (V.LT11) or (V.PL10)))
+  V["PT11"] = (((V.KP11) and ((10 + (0.0524 * math.max(V.SD11, 0)))) or (V.PT10)))
+  V["PD11"] = (((V.KP11) and (345) or (V.PD10)))
+  V["PP11"] = (((V.KP11) and (V.BG11) or (V.PP10)))
+  V["PU11"] = (((V.KP11) and (1) or (V.PU10)))
+  V["PI11"] = (((V.KP11) and (11) or (V.PI10)))
+  V["KF11"] = ((V.K11 and ((V.DS11 < V.FS10))))
+  V["FS11"] = (((V.KF11) and (V.SD11) or (V.FS10)))
+  V["FL11"] = (((V.KF11) and (V.LT11) or (V.FL10)))
+  V["FT11"] = (((V.KF11) and ((10 + (0.0524 * math.max(V.SD11, 0)))) or (V.FT10)))
+  V["FD11"] = (((V.KF11) and (345) or (V.FD10)))
+  V["FP11"] = (((V.KF11) and (V.BG11) or (V.FP10)))
+  V["FU11"] = (((V.KF11) and (1) or (V.FU10)))
+  V["FI11"] = (((V.KF11) and (11) or (V.FI10)))
+  V["K12"] = ((((V.G12) and ((((((V.SD12 < 0)) and ((math.abs(V.LT12) < 300)))) or ((math.abs(((( (S.Heading) - (V.BG12) ) + 180) % 360 - 180)) < 60))))) and ((math.abs(((( (S.Heading) - (225) ) + 180) % 360 - 180)) < (35 + math.max((0), math.min((55), ((V.DS12 / 50)))))))))
+  V["PR12"] = ((_smooth('PR12__st0', ((((math.abs(((( (S.Heading) - (V.BG12) ) + 180) % 360 - 180)) < 45))) and (1) or (0)), 2, dt) > 0.5))
+  V["KP12"] = (((V.K12 and V.PR12) and ((V.DS12 < V.PS11))))
+  V["PS12"] = (((V.KP12) and (V.SD12) or (V.PS11)))
+  V["PL12"] = (((V.KP12) and (V.LT12) or (V.PL11)))
+  V["PT12"] = (((V.KP12) and ((10 + (0.0524 * math.max(V.SD12, 0)))) or (V.PT11)))
+  V["PD12"] = (((V.KP12) and (225) or (V.PD11)))
+  V["PP12"] = (((V.KP12) and (V.BG12) or (V.PP11)))
+  V["PU12"] = (((V.KP12) and (1) or (V.PU11)))
+  V["PI12"] = (((V.KP12) and (12) or (V.PI11)))
+  V["KF12"] = ((V.K12 and ((V.DS12 < V.FS11))))
+  V["FS12"] = (((V.KF12) and (V.SD12) or (V.FS11)))
+  V["FL12"] = (((V.KF12) and (V.LT12) or (V.FL11)))
+  V["FT12"] = (((V.KF12) and ((10 + (0.0524 * math.max(V.SD12, 0)))) or (V.FT11)))
+  V["FD12"] = (((V.KF12) and (225) or (V.FD11)))
+  V["FP12"] = (((V.KF12) and (V.BG12) or (V.FP11)))
+  V["FU12"] = (((V.KF12) and (1) or (V.FU11)))
+  V["FI12"] = (((V.KF12) and (12) or (V.FI11)))
+  V["SLK"] = (((((((math.max(0, math.min(1, (S.Activate7))) > 0.5)) and ((S.AltitudeAgl > 3))))) and (((V.SLK + (((1 - ((V.SLK > (-0.5))))) * (((((math.max(0, math.min(1, (((V.PU12 > 0.5))))) * V.PI12) + (((1 - math.max(0, math.min(1, (((V.PU12 > 0.5))))))) * V.FI12))) - V.SLK)))))) or (((-1)))))
+  V["KM0"] = ((((math.abs((V.SLK - 0)) < 0.5)) and ((V.SD0 < 15000))))
+  V["MS0"] = (((V.KM0) and (V.SD0) or (9999999)))
+  V["ML0"] = (((V.KM0) and (V.LT0) or ((-9999999))))
+  V["MT0"] = (((V.KM0) and ((10 + (0.0524 * math.max(V.SD0, 0)))) or ((-9999999))))
+  V["MD0"] = (((V.KM0) and (10) or (0)))
+  V["MB0"] = (((V.KM0) and (V.BG0) or (9999999)))
+  V["MU0"] = (((V.KM0) and (1) or (0)))
+  V["KM1"] = ((((math.abs((V.SLK - 1)) < 0.5)) and ((V.SD1 < 15000))))
+  V["MS1"] = (((V.KM1) and (V.SD1) or (V.MS0)))
+  V["ML1"] = (((V.KM1) and (V.LT1) or (V.ML0)))
+  V["MT1"] = (((V.KM1) and ((10 + (0.0524 * math.max(V.SD1, 0)))) or (V.MT0)))
+  V["MD1"] = (((V.KM1) and (40) or (V.MD0)))
+  V["MB1"] = (((V.KM1) and (V.BG1) or (V.MB0)))
+  V["MU1"] = (((V.KM1) and (1) or (V.MU0)))
+  V["KM2"] = ((((math.abs((V.SLK - 2)) < 0.5)) and ((V.SD2 < 15000))))
+  V["MS2"] = (((V.KM2) and (V.SD2) or (V.MS1)))
+  V["ML2"] = (((V.KM2) and (V.LT2) or (V.ML1)))
+  V["MT2"] = (((V.KM2) and ((10 + (0.0524 * math.max(V.SD2, 0)))) or (V.MT1)))
+  V["MD2"] = (((V.KM2) and (190) or (V.MD1)))
+  V["MB2"] = (((V.KM2) and (V.BG2) or (V.MB1)))
+  V["MU2"] = (((V.KM2) and (1) or (V.MU1)))
+  V["KM3"] = ((((math.abs((V.SLK - 3)) < 0.5)) and ((V.SD3 < 15000))))
+  V["MS3"] = (((V.KM3) and (V.SD3) or (V.MS2)))
+  V["ML3"] = (((V.KM3) and (V.LT3) or (V.ML2)))
+  V["MT3"] = (((V.KM3) and ((10 + (0.0524 * math.max(V.SD3, 0)))) or (V.MT2)))
+  V["MD3"] = (((V.KM3) and (220) or (V.MD2)))
+  V["MB3"] = (((V.KM3) and (V.BG3) or (V.MB2)))
+  V["MU3"] = (((V.KM3) and (1) or (V.MU2)))
+  V["KM4"] = ((((math.abs((V.SLK - 4)) < 0.5)) and ((V.SD4 < 15000))))
+  V["MS4"] = (((V.KM4) and (V.SD4) or (V.MS3)))
+  V["ML4"] = (((V.KM4) and (V.LT4) or (V.ML3)))
+  V["MT4"] = (((V.KM4) and ((5 + (0.0524 * math.max(V.SD4, 0)))) or (V.MT3)))
+  V["MD4"] = (((V.KM4) and (50) or (V.MD3)))
+  V["MB4"] = (((V.KM4) and (V.BG4) or (V.MB3)))
+  V["MU4"] = (((V.KM4) and (1) or (V.MU3)))
+  V["KM5"] = ((((math.abs((V.SLK - 5)) < 0.5)) and ((V.SD5 < 15000))))
+  V["MS5"] = (((V.KM5) and (V.SD5) or (V.MS4)))
+  V["ML5"] = (((V.KM5) and (V.LT5) or (V.ML4)))
+  V["MT5"] = (((V.KM5) and ((5 + (0.0524 * math.max(V.SD5, 0)))) or (V.MT4)))
+  V["MD5"] = (((V.KM5) and (230) or (V.MD4)))
+  V["MB5"] = (((V.KM5) and (V.BG5) or (V.MB4)))
+  V["MU5"] = (((V.KM5) and (1) or (V.MU4)))
+  V["KM6"] = ((((math.abs((V.SLK - 6)) < 0.5)) and ((V.SD6 < 15000))))
+  V["MS6"] = (((V.KM6) and (V.SD6) or (V.MS5)))
+  V["ML6"] = (((V.KM6) and (V.LT6) or (V.ML5)))
+  V["MT6"] = (((V.KM6) and ((5 + (0.0524 * math.max(V.SD6, 0)))) or (V.MT5)))
+  V["MD6"] = (((V.KM6) and (80) or (V.MD5)))
+  V["MB6"] = (((V.KM6) and (V.BG6) or (V.MB5)))
+  V["MU6"] = (((V.KM6) and (1) or (V.MU5)))
+  V["KM7"] = ((((math.abs((V.SLK - 7)) < 0.5)) and ((V.SD7 < 15000))))
+  V["MS7"] = (((V.KM7) and (V.SD7) or (V.MS6)))
+  V["ML7"] = (((V.KM7) and (V.LT7) or (V.ML6)))
+  V["MT7"] = (((V.KM7) and ((5 + (0.0524 * math.max(V.SD7, 0)))) or (V.MT6)))
+  V["MD7"] = (((V.KM7) and (260) or (V.MD6)))
+  V["MB7"] = (((V.KM7) and (V.BG7) or (V.MB6)))
+  V["MU7"] = (((V.KM7) and (1) or (V.MU6)))
+  V["KM8"] = ((((math.abs((V.SLK - 8)) < 0.5)) and ((V.SD8 < 15000))))
+  V["MS8"] = (((V.KM8) and (V.SD8) or (V.MS7)))
+  V["ML8"] = (((V.KM8) and (V.LT8) or (V.ML7)))
+  V["MT8"] = (((V.KM8) and ((3 + (0.0524 * math.max(V.SD8, 0)))) or (V.MT7)))
+  V["MD8"] = (((V.KM8) and (45) or (V.MD7)))
+  V["MB8"] = (((V.KM8) and (V.BG8) or (V.MB7)))
+  V["MU8"] = (((V.KM8) and (1) or (V.MU7)))
+  V["KM9"] = ((((math.abs((V.SLK - 9)) < 0.5)) and ((V.SD9 < 15000))))
+  V["MS9"] = (((V.KM9) and (V.SD9) or (V.MS8)))
+  V["ML9"] = (((V.KM9) and (V.LT9) or (V.ML8)))
+  V["MT9"] = (((V.KM9) and ((3 + (0.0524 * math.max(V.SD9, 0)))) or (V.MT8)))
+  V["MD9"] = (((V.KM9) and (225) or (V.MD8)))
+  V["MB9"] = (((V.KM9) and (V.BG9) or (V.MB8)))
+  V["MU9"] = (((V.KM9) and (1) or (V.MU8)))
+  V["KM10"] = ((((math.abs((V.SLK - 10)) < 0.5)) and ((V.SD10 < 15000))))
+  V["MS10"] = (((V.KM10) and (V.SD10) or (V.MS9)))
+  V["ML10"] = (((V.KM10) and (V.LT10) or (V.ML9)))
+  V["MT10"] = (((V.KM10) and ((3 + (0.0524 * math.max(V.SD10, 0)))) or (V.MT9)))
+  V["MD10"] = (((V.KM10) and (180) or (V.MD9)))
+  V["MB10"] = (((V.KM10) and (V.BG10) or (V.MB9)))
+  V["MU10"] = (((V.KM10) and (1) or (V.MU9)))
+  V["KM11"] = ((((math.abs((V.SLK - 11)) < 0.5)) and ((V.SD11 < 15000))))
+  V["MS11"] = (((V.KM11) and (V.SD11) or (V.MS10)))
+  V["ML11"] = (((V.KM11) and (V.LT11) or (V.ML10)))
+  V["MT11"] = (((V.KM11) and ((10 + (0.0524 * math.max(V.SD11, 0)))) or (V.MT10)))
+  V["MD11"] = (((V.KM11) and (345) or (V.MD10)))
+  V["MB11"] = (((V.KM11) and (V.BG11) or (V.MB10)))
+  V["MU11"] = (((V.KM11) and (1) or (V.MU10)))
+  V["KM12"] = ((((math.abs((V.SLK - 12)) < 0.5)) and ((V.SD12 < 15000))))
+  V["MS12"] = (((V.KM12) and (V.SD12) or (V.MS11)))
+  V["ML12"] = (((V.KM12) and (V.LT12) or (V.ML11)))
+  V["MT12"] = (((V.KM12) and ((10 + (0.0524 * math.max(V.SD12, 0)))) or (V.MT11)))
+  V["MD12"] = (((V.KM12) and (225) or (V.MD11)))
+  V["MB12"] = (((V.KM12) and (V.BG12) or (V.MB11)))
+  V["MU12"] = (((V.KM12) and (1) or (V.MU11)))
+  V["rwyPri"] = ((((((V.MU12 > 0.5)) or ((V.PU12 > 0.5))))) and (1) or (0))
+  V["rwyOk"] = (((((((V.MU12 > 0.5)) or ((V.PU12 > 0.5))) or ((V.FU12 > 0.5))))) and (1) or (0))
+  V["SD"] = (((math.max(0, math.min(1, (((V.MU12 > 0.5))))) * V.MS12) + (((1 - math.max(0, math.min(1, (((V.MU12 > 0.5))))))) * (((math.max(0, math.min(1, (((V.PU12 > 0.5))))) * V.PS12) + (((1 - math.max(0, math.min(1, (((V.PU12 > 0.5))))))) * V.FS12))))))
+  V["LT"] = (((math.max(0, math.min(1, (((V.MU12 > 0.5))))) * V.ML12) + (((1 - math.max(0, math.min(1, (((V.MU12 > 0.5))))))) * (((math.max(0, math.min(1, (((V.PU12 > 0.5))))) * V.PL12) + (((1 - math.max(0, math.min(1, (((V.PU12 > 0.5))))))) * V.FL12))))))
+  V["TLA"] = (((math.max(0, math.min(1, (((V.MU12 > 0.5))))) * V.MT12) + (((1 - math.max(0, math.min(1, (((V.MU12 > 0.5))))))) * (((math.max(0, math.min(1, (((V.PU12 > 0.5))))) * V.PT12) + (((1 - math.max(0, math.min(1, (((V.PU12 > 0.5))))))) * V.FT12))))))
+  V["HDG"] = (((math.max(0, math.min(1, (((V.MU12 > 0.5))))) * V.MD12) + (((1 - math.max(0, math.min(1, (((V.MU12 > 0.5))))))) * (((math.max(0, math.min(1, (((V.PU12 > 0.5))))) * V.PD12) + (((1 - math.max(0, math.min(1, (((V.PU12 > 0.5))))))) * V.FD12))))))
+  V["BRG"] = (((math.max(0, math.min(1, (((V.MU12 > 0.5))))) * V.MB12) + (((1 - math.max(0, math.min(1, (((V.MU12 > 0.5))))))) * (((math.max(0, math.min(1, (((V.PU12 > 0.5))))) * V.PP12) + (((1 - math.max(0, math.min(1, (((V.PU12 > 0.5))))))) * V.FP12))))))
+  V["trkNow"] = math.deg(math.atan(_rate('trkNow__st0', S.Longitude, dt), _rate('trkNow__st1', S.Latitude, dt)))
+  V["trkGd"] = (((((S.Time > 0.5)) and ((S.AltitudeAgl > 20))) and ((S.GS > 25))))
+  V["trkUse"] = ((V.trkGd) and (V.trkNow) or (S.Heading))
+  V["CRAB"] = ((V.trkGd) and (((( (S.Heading) - (V.trkNow) ) + 180) % 360 - 180)) or (0))
+  V["XW"] = (S.IAS * math.sin(math.rad(V.CRAB)))
+  V["HW"] = ((S.IAS * math.cos(math.rad(V.CRAB))) - S.GS)
+  V["xtrk"] = ((((V.SD < 15000))) and (V.LT) or (0))
+  V["trkEr"] = ((((V.SD < 15000))) and (((( (V.HDG) - (V.trkUse) ) + 180) % 360 - 180)) or (0))
+  V["Rturn"] = ((S.GS * S.GS) / 5.66)
+  V["LEAD"] = math.max(((-45)), math.min((45), (math.deg(math.atan((V.xtrk / math.max(400, V.Rturn)))))))
+  V["bankTrk"] = (-math.max(((-30)), math.min((30), ((V.trkEr + V.LEAD)))))
+  V["altTgt"] = math.min((((S.VTOL > 0)) and ((500 + (1500 * S.VTOL))) or ((500 + (500 * S.VTOL)))), ((((V.SD < 15000))) and (V.TLA) or (9999999)))
+  V["tanG"] = (math.max((3), math.min((7), ((S.GS * 0.12)))) / math.max(S.GS, 5))
+  V["fldE"] = (V.TLA - (0.0524 * math.max(V.SD, 0)))
+  V["htExcess"] = ((((V.SD < 15000))) and (math.max(0, (((S.Altitude - V.fldE)) - (V.SD * V.tanG)))) or (0))
+  V["vsLine"] = ((0.25 * ((V.altTgt - S.Altitude))) + (((((((V.SD > 0)) and ((V.SD < 15000))))) and ((0.0524 * math.max(((-160)), math.min((160), (_rate('vsLine__st0', V.SD, dt)))))) or (0))))
+  V["vsCmd"] = math.max(((-math.max((3), math.min((7), ((S.GS * 0.12)))))), math.min((math.max((3), math.min((7), ((S.GS * 0.12))))), (((((S.AltitudeAgl < 34))) and (math.max(V.vsLine, (-math.max((0.4), math.min((6), (((S.AltitudeAgl * math.max((20), math.min((90), (S.GS)))) / 480))))))) or (V.vsLine)))))
+  V["vsErr"] = (V.vsCmd - V.vs)
+  V["vsInt"] = math.max(((-20)), math.min((20), (_sum('vsInt__st0', ((((((((math.abs(S.Roll) < 0.05)) and ((math.abs(S.Pitch) < 0.05)))) and ((math.abs(V.vsErr) < 10))))) and ((V.vsErr * 0.35)) or (0)), dt))))
+  V["altTgtH"] = (((S.VTOL > 0)) and ((500 + (1500 * S.VTOL))) or ((500 + (500 * S.VTOL))))
+  V["vsCmdH"] = math.max(((-V.vsLim)), math.min((V.vsLim), ((0.25 * ((V.altTgtH - S.Altitude))))))
+  V["vsErrH"] = (V.vsCmdH - V.vs)
+  V["cmdTheF_P"] = math.min((((-30) * S.Pitch) + ((V.hold * V.airb) * ((0.8 * V.vsErrH)))), ((((S.IAS < 45)) and (8) or (90))))
+  V["cmdTheF_I"] = math.max(((-20)), math.min((20), (_sum('cmdTheF_I__st0', (((((((math.abs(S.Roll) < 0.05)) and ((math.abs(S.Pitch) < 0.05))) and ((math.abs(V.vsCmdH) < ((V.vsLim - 0.5))))))) and ((V.vsErrH * 0.35)) or (((0 - (V.cmdTheF_I * 1.5))))), dt))))
+  V["cmdTheF"] = math.min((V.cmdTheF_P + ((V.hold * V.airb) * V.cmdTheF_I)), ((((S.IAS < 45)) and (8) or (90))))
+  V["cmdThe"] = math.min(math.max((((-30) * S.Pitch) + ((V.hold * V.airb) * (((0.8 * V.vsErr) + V.vsInt)))), math.max((0), math.min((8), ((0.9 * (((0 - V.vs) - 1.5))))))), ((((S.IAS < 45)) and (8) or (90))))
+  V["phiCmdF"] = V.cmdPhi
+  V["phiCmd"] = (V.cmdPhi + ((V.hold * V.airb) * V.bankTrk))
+  V["VAPP"] = 55
+  V["airFly"] = (((((((V.airEver > 0.5)) and ((S.AltitudeAgl >= 3))) and ((V.SD < 15000))))) and (1) or (0))
+  V["gndIdle"] = (((((((V.airEver > 0.5)) and ((S.AltitudeAgl < 3))) and ((V.SD < 15000))))) and (1) or (0))
+  V["thrErr"] = (V.VAPP - S.IAS)
+  V["thrInt"] = math.max((0), math.min((1), (_sum('thrInt__st0', ((((((((math.abs(V.thrErr) < 12)) and ((V.airFly > 0.5))))) and ((V.thrErr * 0.03)) or (0)))), dt))))
+  V["thrPath"] = math.max((0), math.min((0.6), ((0.07 * V.vsCmd))))
+  V["thrPI"] = math.max((0), math.min((1), ((((0.10 * V.thrErr) + V.thrInt) + V.thrPath))))
+  V["thrCmd"] = ((V.airFly * V.thrPI) + ((((1 - V.airFly)) * ((1 - V.gndIdle))) * S.Throttle))
+  V["spdBrk"] = (((((((V.airEver > 0.5)) and ((S.AltitudeAgl > 100))) and ((V.SD < 15000))))) and (math.max((0), math.min((0.4), ((0.08 * (((S.IAS - V.VAPP) - 12))))))) or (0))
+  V["revOn"] = (((((((V.airEver > 0.5)) and ((S.AltitudeAgl < 5))) and ((S.IAS < 50))))) and (1) or (0))
+  V["appr"] = ((((((((((V.SD > 0)) and ((V.SD < 15000)))) and ((((S.AltitudeAgl > 25)) and ((S.AltitudeAgl < 400)))))) and ((V.vs < 0))))) and (1) or (0))
+  V["appr"] = ((((((((((V.SD > 0)) and ((V.SD < 15000)))) and ((((S.AltitudeAgl > 25)) and ((S.AltitudeAgl < 400)))))) and ((V.vs < 0))))) and (1) or (0))
+  V["gndBit"] = ((((S.AltitudeAgl < 3))) and (1) or (0))
+  V["gearCmd"] = math.max(V.gndBit, V.appr)
+  V["brkT"] = math.max((0), math.min((60), (_sum('brkT__st0', (((((((V.airEver > 0.5)) and ((S.AltitudeAgl < 3))) and ((S.IAS > 30))))) and (1) or ((((((((V.airEver > 0.5)) and ((S.AltitudeAgl > 20))))) and ((-1)) or (0))))), dt))))
+  V["brkLvl"] = ((((V.brkT < 5))) and (0.85) or (math.max((0), math.min((0.85), ((((S.IAS - 25)) * 0.04))))))
+  V["brkCmd"] = ((((((V.airEver > 0.5)) and ((S.AltitudeAgl < 3))))) and (V.brkLvl) or (0))
+  V["gearUp"] = ((((S.GearDown > 0.5))) and (0) or (1))
+  V["lgWarn"] = (((((((V.SD < 15000)) and ((S.AltitudeAgl < 400))) and ((V.gearUp > 0.5))))) and (1) or (0))
+  return V
+end
+
+return M
+
+end)()
+-- ==== /面板镜像 ====
+
+
+-- ==== APPR：FT 进近面板内部量落盘（由 ft_mirror_gen.py 机械生成，勿手改）====
+-- setter 无日志通道 ⇒ 在 Lua 里按**同一条式子**复算并打印（同 FT8 复算的先例）。
+-- 与面板的同步**由构造保证**（同一份 PANEL 翻译而来）；漂移只可能来自 sum/smooth/rate
+-- 的初值（镜像从启用那帧起算，面板可能更早）⇒ 看数据时以稳态段为准。
+local _apfr = 0
+local function _num(x)
+	if x == nil then return -99999 end
+	if type(x) ~= "number" then return x and 1 or 0 end
+	if x ~= x then return -99999 end            -- NaN 哨兵
+	return x
+end
+local function _appr_hdr() print("APPRHDR,cid,t,SD,LT,TLA,HDG,BRG,rwyOk,rwyPri,xtrk,trkEr,trkUse,trkGd,LEAD,bankTrk,phiCmd,cmdPhi,htExcess,altTgt,vsCmd,vsErr,tanG,fldE,vsLine,thrCmd,thrPI,thrErr,spdBrk,airFly,gndIdle,revOn,SLK,appr,gearCmd,brkCmd,brkLvl,RCAP,boot,airb,hold") end
+local function _appr_log()
+	_apfr = _apfr + 1
+	if math.fmod(_apfr, 6) ~= 0 then return end   -- 6 分频（约 10~20 Hz，与 TEL 同量级）
+	local V = _ftmirror.step()
+	print(string.format("APPR,%d,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+		_cidn, craft.Time,
+		_num(V["SD"]),
+			_num(V["LT"]),
+			_num(V["TLA"]),
+			_num(V["HDG"]),
+			_num(V["BRG"]),
+			_num(V["rwyOk"]),
+			_num(V["rwyPri"]),
+			_num(V["xtrk"]),
+			_num(V["trkEr"]),
+			_num(V["trkUse"]),
+			_num(V["trkGd"]),
+			_num(V["LEAD"]),
+			_num(V["bankTrk"]),
+			_num(V["phiCmd"]),
+			_num(V["cmdPhi"]),
+			_num(V["htExcess"]),
+			_num(V["altTgt"]),
+			_num(V["vsCmd"]),
+			_num(V["vsErr"]),
+			_num(V["tanG"]),
+			_num(V["fldE"]),
+			_num(V["vsLine"]),
+			_num(V["thrCmd"]),
+			_num(V["thrPI"]),
+			_num(V["thrErr"]),
+			_num(V["spdBrk"]),
+			_num(V["airFly"]),
+			_num(V["gndIdle"]),
+			_num(V["revOn"]),
+			_num(V["SLK"]),
+			_num(V["appr"]),
+			_num(V["gearCmd"]),
+			_num(V["brkCmd"]),
+			_num(V["brkLvl"]),
+			_num(V["RCAP"]),
+			_num(V["boot"]),
+			_num(V["airb"]),
+			_num(V["hold"])))
+end
+-- ==== /APPR ====
+
 local _origInitialize = initialize
 local _origUpdate = update
 local _frame = 0
@@ -12,6 +657,9 @@ local _cidn = nil          -- 本机身份号（首帧位置派生；一局面�
 function initialize()
 	if _origInitialize then _origInitialize() end
 	print("TELHDR,cid,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw,flp")
+	_appr_hdr()
+	_appr_hdr()
+	_appr_hdr()
 end
 
 -- ==== FT-ONLY 编译开关（2026-09-25，用户裁定）================================
@@ -112,7 +760,13 @@ function update()
 			craft.AngleOfAttack, craft.AngleOfSlip, craft.GForce, craft.VerticalG,
 			craft.Fuel,
 			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
-		-- FT8 定高环内部量：目标高/实际高/爬升率指令/误差/P指令/I积分/合成指令/油门杆
+		
+		_appr_log()
+
+_appr_log()
+
+_appr_log()
+-- FT8 定高环内部量：目标高/实际高/爬升率指令/误差/P指令/I积分/合成指令/油门杆
 		print(string.format("FT8,%d,%.3f,%.1f,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f",
 			_cidn, craft.Time, ft8_altTgt, craft.Altitude, ft8_vsCmd, ft8_vs, ft8_err, ft8_P, ft8_I, ft8_cmd))
 	end

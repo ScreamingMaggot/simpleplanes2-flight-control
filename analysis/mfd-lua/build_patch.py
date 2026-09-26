@@ -19,6 +19,17 @@ UI_REF = "UI/Xml/Mfd/DefaultMfdUI"
 def build_xml():
     stock = io.open(STOCK_LUA, encoding="utf-8").read()
     addon = io.open(ADDON_LUA, encoding="utf-8").read()
+    # ★镜像存在性提示（2026-09-27，SC-6 v2.36）：APPR 流由 build_mirror_addon.py 注入。
+    #   没注入也能飞，但**一行 APPR 都不会有**——那种"飞完才发现没数据"整局白费，
+    #   所以在此显式吼一声（不阻断：镜像与否是可选观测，不是发货前提）。
+    if "_ftmirror" not in addon:
+        print("!" * 72)
+        print("! 注意：telemetry-addon.lua 里没有镜像（无 _ftmirror）⇒ **不会有 APPR 行**。")
+        print("!      要 38 列进近内部量，先跑：python build_mirror_addon.py --inplace")
+        print("!      然后再跑本脚本 --apply，并**冷启动**游戏。")
+        print("!" * 72)
+    else:
+        print("镜像已带（APPR 流可用）")
     script = stock + "\n\n" + addon
     # 语法门禁：MoonSharp 加载失败=整个 MFD 静默瘫痪（v7 教训），离线先 parse
     try:
