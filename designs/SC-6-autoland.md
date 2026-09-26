@@ -1420,3 +1420,7 @@ cid=54835：ENROUTE 正常；进盘旋后 LT 单调外扩、航迹≈航向（�
 `Ar`=7&离地&有目标；`orbS`=(Aexc>50)；`orbR`=(Aexc≤50 & |AL|<200 & |Δ(Heading,AH)|<30)（够低且已对正回流）；
 `ORB = Ar*(orbS + ORB*(1-orbR))` ⇒ armed 时"要消高 **或** 尚未对正"就转，只有"E≈0 且已对正"才停；
 横向 `hCmd = ORB*hTan + (1-ORB)*hBase`（hTan 切线圆、hBase=远则朝入口 AB / 近则跑道航向 AH）；`bankApp=Ar? 追 hCmd(±55) : bankTrk`；`altTgt=ORB? Alt−400 : 正常`。弃 PH/h0/h1/h2。--apply 指纹 见下。
+
+## v2.31.6（2026-09-26）**推翻重来**：M4 四态/盘旋整块回退到安全基线（60fddc7）
+
+四态连改 6 版（坡限、rwyEng、切线符号、PH 迟滞、ORB 锁存、NTL 锁存）仍"按7立刻转→E 迅速 0→停→飞走"。按用户指示与"修三版未过即审计重写"：`git checkout 60fddc7 -- ft_ta2_patch.py` 恢复（v2.22 安全五边 + 油门全交律 + thrNow/TH + htExcess 读数 + 跑道锁定 SLK），重新 --apply（指纹 a58417bb，面板 456），手摆件/字号未动。**M4 自动消高暂搁置**；若再做，须先在 `approach_sim.py` 式离线把"识别→航段→盘旋→五边"连**喂给 FT 受限相位机**一起验证，不逐刀盲补。
