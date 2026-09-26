@@ -223,7 +223,12 @@ PANEL += [
     #   拉平项(AGL<34)仍走 max(vsLine,−收光)，只在**正在下沉**时生效。
     # 【v2.27 用户定：爬升预算 3→7（对"低于道线爬不回"掉海的修正）】上钳由死 `3` 改成**与下沉对称的
     #   `clamp(GS·0.12, 3, 7)`**（巡航/进近速度下=7 m/s，低速自动收到 3，免低速猛拉机头）；仍只在 7 层通路消费。
-    ("vsCmd",  "clamp((AltitudeAgl < 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))"),
+    # 【v2.32 用户实战法：太高就"沿中线大角度直插、快了再拉平"——不绕圈】下沉预算**不对称**：
+    #   高于3°线(altTgt<Altitude) 且离地>60m ⇒ 放开到 ~俯冲角 `clamp(GS·0.5,3,30)`（拿高度换速度）；
+    #   在线/线下(或近地) ⇒ 仍紧钳 `clamp(GS·0.12,3,7)`（防空/防短接）。横向仍咬中线，末段拉平不变。
+    ("abvLine","clamp01((altTgt < Altitude) & (AltitudeAgl > 60))"),
+    ("sinkLo", "abvLine * clamp(GS * 0.5, 3, 30) + (1 - abvLine) * clamp(GS * 0.12, 3, 7)"),
+    ("vsCmd",  "clamp((AltitudeAgl < 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -sinkLo, clamp(GS * 0.12, 3, 7))"),
     ("vsErr",  "vsCmd - vs"),
     # 近区积分（|vsErr|<4 m/s 才积）：大误差段交给 P+前馈，避免积分攒大风车后顶着不放
     # 【v2.4】旧门 `abs(vsErr) < 4` 是**这场事故的直接原因**：撞水前 vsErr 一路 4.4，刚好卡在门外
