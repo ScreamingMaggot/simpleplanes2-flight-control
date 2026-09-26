@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Aircraft name="TESTaircraft2" tags="" url="" theme="Default" paintOrigin="0.1905341,5.341986,-4.862177" size="13.03798,4.054626,10.73545" boundsOffset="-4.732609E-05,-0.02893853,3.291648" boundsMin="-6.518989,1.866745,-5.367724" xmlVersion="25" legacyJointIdentification="false" clientVersion="0.7.8.103">
-  <Specifications WingSpan="13.0379763" Length="10.7354488" Height="4.054626" WingArea="23.5471935" WingLoading="60.0099335" EmptyWeight="1320.948" LoadedWeight="1413.06555" PowerToWeightRatio="0" PowerOutput="0" PartCount="50" ControlSurfaceCount="5" PerformanceCost="518.100037" FuelAmount="114.574013" Drag="825.216431" HorsePower="300" HorsePowerToWeightRatio="0.09629977" />
+  <Specifications WingSpan="13.0379763" Length="10.7354488" Height="4.054626" WingArea="23.5471935" WingLoading="60.0099335" EmptyWeight="1320.948" LoadedWeight="1413.06555" PowerToWeightRatio="0" PowerOutput="0" PartCount="50" ControlSurfaceCount="5" PerformanceCost="518.100037" FuelAmount="114.574013" Drag="827.9237" HorsePower="300" HorsePowerToWeightRatio="0.09629977" />
   <Variables>
     <Setter variable="boot" function="clamp01(Time * 0.25)" priority="0" />
     <Setter variable="cmdPhi" function="-60 * Roll" priority="0" />
@@ -84,6 +84,7 @@
     <Setter variable="PD0" function="(KP0 ? 10 : 0)" priority="0" />
     <Setter variable="PP0" function="(KP0 ? BG0 : 9999999)" priority="0" />
     <Setter variable="PU0" function="(KP0 ? 1 : 0)" priority="0" />
+    <Setter variable="PI0" function="(KP0 ? 0 : -1)" priority="0" />
     <Setter variable="KF0" function="(K0 &amp; (DS0 &lt; 9999999))" priority="0" />
     <Setter variable="FS0" function="(KF0 ? SD0 : 9999999)" priority="0" />
     <Setter variable="FL0" function="(KF0 ? LT0 : -9999999)" priority="0" />
@@ -91,6 +92,7 @@
     <Setter variable="FD0" function="(KF0 ? 10 : 0)" priority="0" />
     <Setter variable="FP0" function="(KF0 ? BG0 : 9999999)" priority="0" />
     <Setter variable="FU0" function="(KF0 ? 1 : 0)" priority="0" />
+    <Setter variable="FI0" function="(KF0 ? 0 : -1)" priority="0" />
     <Setter variable="K1" function="((G1) &amp; (((SD1 &lt; 0) &amp; (abs(LT1) &lt; 300)) | (abs(deltaangle(BG1, Heading)) &lt; 60)) &amp; (abs(deltaangle(40, Heading)) &lt; 35 + clamp(DS1 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR1" function="(smooth((abs(deltaangle(BG1, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP1" function="(K1 &amp; PR1 &amp; (DS1 &lt; PS0))" priority="0" />
@@ -100,6 +102,7 @@
     <Setter variable="PD1" function="(KP1 ? 40 : PD0)" priority="0" />
     <Setter variable="PP1" function="(KP1 ? BG1 : PP0)" priority="0" />
     <Setter variable="PU1" function="(KP1 ? 1 : PU0)" priority="0" />
+    <Setter variable="PI1" function="(KP1 ? 1 : PI0)" priority="0" />
     <Setter variable="KF1" function="(K1 &amp; (DS1 &lt; FS0))" priority="0" />
     <Setter variable="FS1" function="(KF1 ? SD1 : FS0)" priority="0" />
     <Setter variable="FL1" function="(KF1 ? LT1 : FL0)" priority="0" />
@@ -107,6 +110,7 @@
     <Setter variable="FD1" function="(KF1 ? 40 : FD0)" priority="0" />
     <Setter variable="FP1" function="(KF1 ? BG1 : FP0)" priority="0" />
     <Setter variable="FU1" function="(KF1 ? 1 : FU0)" priority="0" />
+    <Setter variable="FI1" function="(KF1 ? 1 : FI0)" priority="0" />
     <Setter variable="K2" function="((G2) &amp; (((SD2 &lt; 0) &amp; (abs(LT2) &lt; 300)) | (abs(deltaangle(BG2, Heading)) &lt; 60)) &amp; (abs(deltaangle(190, Heading)) &lt; 35 + clamp(DS2 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR2" function="(smooth((abs(deltaangle(BG2, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP2" function="(K2 &amp; PR2 &amp; (DS2 &lt; PS1))" priority="0" />
@@ -116,6 +120,7 @@
     <Setter variable="PD2" function="(KP2 ? 190 : PD1)" priority="0" />
     <Setter variable="PP2" function="(KP2 ? BG2 : PP1)" priority="0" />
     <Setter variable="PU2" function="(KP2 ? 1 : PU1)" priority="0" />
+    <Setter variable="PI2" function="(KP2 ? 2 : PI1)" priority="0" />
     <Setter variable="KF2" function="(K2 &amp; (DS2 &lt; FS1))" priority="0" />
     <Setter variable="FS2" function="(KF2 ? SD2 : FS1)" priority="0" />
     <Setter variable="FL2" function="(KF2 ? LT2 : FL1)" priority="0" />
@@ -123,6 +128,7 @@
     <Setter variable="FD2" function="(KF2 ? 190 : FD1)" priority="0" />
     <Setter variable="FP2" function="(KF2 ? BG2 : FP1)" priority="0" />
     <Setter variable="FU2" function="(KF2 ? 1 : FU1)" priority="0" />
+    <Setter variable="FI2" function="(KF2 ? 2 : FI1)" priority="0" />
     <Setter variable="K3" function="((G3) &amp; (((SD3 &lt; 0) &amp; (abs(LT3) &lt; 300)) | (abs(deltaangle(BG3, Heading)) &lt; 60)) &amp; (abs(deltaangle(220, Heading)) &lt; 35 + clamp(DS3 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR3" function="(smooth((abs(deltaangle(BG3, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP3" function="(K3 &amp; PR3 &amp; (DS3 &lt; PS2))" priority="0" />
@@ -132,6 +138,7 @@
     <Setter variable="PD3" function="(KP3 ? 220 : PD2)" priority="0" />
     <Setter variable="PP3" function="(KP3 ? BG3 : PP2)" priority="0" />
     <Setter variable="PU3" function="(KP3 ? 1 : PU2)" priority="0" />
+    <Setter variable="PI3" function="(KP3 ? 3 : PI2)" priority="0" />
     <Setter variable="KF3" function="(K3 &amp; (DS3 &lt; FS2))" priority="0" />
     <Setter variable="FS3" function="(KF3 ? SD3 : FS2)" priority="0" />
     <Setter variable="FL3" function="(KF3 ? LT3 : FL2)" priority="0" />
@@ -139,6 +146,7 @@
     <Setter variable="FD3" function="(KF3 ? 220 : FD2)" priority="0" />
     <Setter variable="FP3" function="(KF3 ? BG3 : FP2)" priority="0" />
     <Setter variable="FU3" function="(KF3 ? 1 : FU2)" priority="0" />
+    <Setter variable="FI3" function="(KF3 ? 3 : FI2)" priority="0" />
     <Setter variable="K4" function="((G4) &amp; (((SD4 &lt; 0) &amp; (abs(LT4) &lt; 300)) | (abs(deltaangle(BG4, Heading)) &lt; 60)) &amp; (abs(deltaangle(50, Heading)) &lt; 35 + clamp(DS4 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR4" function="(smooth((abs(deltaangle(BG4, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP4" function="(K4 &amp; PR4 &amp; (DS4 &lt; PS3))" priority="0" />
@@ -148,6 +156,7 @@
     <Setter variable="PD4" function="(KP4 ? 50 : PD3)" priority="0" />
     <Setter variable="PP4" function="(KP4 ? BG4 : PP3)" priority="0" />
     <Setter variable="PU4" function="(KP4 ? 1 : PU3)" priority="0" />
+    <Setter variable="PI4" function="(KP4 ? 4 : PI3)" priority="0" />
     <Setter variable="KF4" function="(K4 &amp; (DS4 &lt; FS3))" priority="0" />
     <Setter variable="FS4" function="(KF4 ? SD4 : FS3)" priority="0" />
     <Setter variable="FL4" function="(KF4 ? LT4 : FL3)" priority="0" />
@@ -155,6 +164,7 @@
     <Setter variable="FD4" function="(KF4 ? 50 : FD3)" priority="0" />
     <Setter variable="FP4" function="(KF4 ? BG4 : FP3)" priority="0" />
     <Setter variable="FU4" function="(KF4 ? 1 : FU3)" priority="0" />
+    <Setter variable="FI4" function="(KF4 ? 4 : FI3)" priority="0" />
     <Setter variable="K5" function="((G5) &amp; (((SD5 &lt; 0) &amp; (abs(LT5) &lt; 300)) | (abs(deltaangle(BG5, Heading)) &lt; 60)) &amp; (abs(deltaangle(230, Heading)) &lt; 35 + clamp(DS5 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR5" function="(smooth((abs(deltaangle(BG5, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP5" function="(K5 &amp; PR5 &amp; (DS5 &lt; PS4))" priority="0" />
@@ -164,6 +174,7 @@
     <Setter variable="PD5" function="(KP5 ? 230 : PD4)" priority="0" />
     <Setter variable="PP5" function="(KP5 ? BG5 : PP4)" priority="0" />
     <Setter variable="PU5" function="(KP5 ? 1 : PU4)" priority="0" />
+    <Setter variable="PI5" function="(KP5 ? 5 : PI4)" priority="0" />
     <Setter variable="KF5" function="(K5 &amp; (DS5 &lt; FS4))" priority="0" />
     <Setter variable="FS5" function="(KF5 ? SD5 : FS4)" priority="0" />
     <Setter variable="FL5" function="(KF5 ? LT5 : FL4)" priority="0" />
@@ -171,6 +182,7 @@
     <Setter variable="FD5" function="(KF5 ? 230 : FD4)" priority="0" />
     <Setter variable="FP5" function="(KF5 ? BG5 : FP4)" priority="0" />
     <Setter variable="FU5" function="(KF5 ? 1 : FU4)" priority="0" />
+    <Setter variable="FI5" function="(KF5 ? 5 : FI4)" priority="0" />
     <Setter variable="K6" function="((G6) &amp; (((SD6 &lt; 0) &amp; (abs(LT6) &lt; 300)) | (abs(deltaangle(BG6, Heading)) &lt; 60)) &amp; (abs(deltaangle(80, Heading)) &lt; 35 + clamp(DS6 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR6" function="(smooth((abs(deltaangle(BG6, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP6" function="(K6 &amp; PR6 &amp; (DS6 &lt; PS5))" priority="0" />
@@ -180,6 +192,7 @@
     <Setter variable="PD6" function="(KP6 ? 80 : PD5)" priority="0" />
     <Setter variable="PP6" function="(KP6 ? BG6 : PP5)" priority="0" />
     <Setter variable="PU6" function="(KP6 ? 1 : PU5)" priority="0" />
+    <Setter variable="PI6" function="(KP6 ? 6 : PI5)" priority="0" />
     <Setter variable="KF6" function="(K6 &amp; (DS6 &lt; FS5))" priority="0" />
     <Setter variable="FS6" function="(KF6 ? SD6 : FS5)" priority="0" />
     <Setter variable="FL6" function="(KF6 ? LT6 : FL5)" priority="0" />
@@ -187,6 +200,7 @@
     <Setter variable="FD6" function="(KF6 ? 80 : FD5)" priority="0" />
     <Setter variable="FP6" function="(KF6 ? BG6 : FP5)" priority="0" />
     <Setter variable="FU6" function="(KF6 ? 1 : FU5)" priority="0" />
+    <Setter variable="FI6" function="(KF6 ? 6 : FI5)" priority="0" />
     <Setter variable="K7" function="((G7) &amp; (((SD7 &lt; 0) &amp; (abs(LT7) &lt; 300)) | (abs(deltaangle(BG7, Heading)) &lt; 60)) &amp; (abs(deltaangle(260, Heading)) &lt; 35 + clamp(DS7 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR7" function="(smooth((abs(deltaangle(BG7, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP7" function="(K7 &amp; PR7 &amp; (DS7 &lt; PS6))" priority="0" />
@@ -196,6 +210,7 @@
     <Setter variable="PD7" function="(KP7 ? 260 : PD6)" priority="0" />
     <Setter variable="PP7" function="(KP7 ? BG7 : PP6)" priority="0" />
     <Setter variable="PU7" function="(KP7 ? 1 : PU6)" priority="0" />
+    <Setter variable="PI7" function="(KP7 ? 7 : PI6)" priority="0" />
     <Setter variable="KF7" function="(K7 &amp; (DS7 &lt; FS6))" priority="0" />
     <Setter variable="FS7" function="(KF7 ? SD7 : FS6)" priority="0" />
     <Setter variable="FL7" function="(KF7 ? LT7 : FL6)" priority="0" />
@@ -203,6 +218,7 @@
     <Setter variable="FD7" function="(KF7 ? 260 : FD6)" priority="0" />
     <Setter variable="FP7" function="(KF7 ? BG7 : FP6)" priority="0" />
     <Setter variable="FU7" function="(KF7 ? 1 : FU6)" priority="0" />
+    <Setter variable="FI7" function="(KF7 ? 7 : FI6)" priority="0" />
     <Setter variable="K8" function="((G8) &amp; (((SD8 &lt; 0) &amp; (abs(LT8) &lt; 300)) | (abs(deltaangle(BG8, Heading)) &lt; 60)) &amp; (abs(deltaangle(45, Heading)) &lt; 35 + clamp(DS8 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR8" function="(smooth((abs(deltaangle(BG8, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP8" function="(K8 &amp; PR8 &amp; (DS8 &lt; PS7))" priority="0" />
@@ -212,6 +228,7 @@
     <Setter variable="PD8" function="(KP8 ? 45 : PD7)" priority="0" />
     <Setter variable="PP8" function="(KP8 ? BG8 : PP7)" priority="0" />
     <Setter variable="PU8" function="(KP8 ? 1 : PU7)" priority="0" />
+    <Setter variable="PI8" function="(KP8 ? 8 : PI7)" priority="0" />
     <Setter variable="KF8" function="(K8 &amp; (DS8 &lt; FS7))" priority="0" />
     <Setter variable="FS8" function="(KF8 ? SD8 : FS7)" priority="0" />
     <Setter variable="FL8" function="(KF8 ? LT8 : FL7)" priority="0" />
@@ -219,6 +236,7 @@
     <Setter variable="FD8" function="(KF8 ? 45 : FD7)" priority="0" />
     <Setter variable="FP8" function="(KF8 ? BG8 : FP7)" priority="0" />
     <Setter variable="FU8" function="(KF8 ? 1 : FU7)" priority="0" />
+    <Setter variable="FI8" function="(KF8 ? 8 : FI7)" priority="0" />
     <Setter variable="K9" function="((G9) &amp; (((SD9 &lt; 0) &amp; (abs(LT9) &lt; 300)) | (abs(deltaangle(BG9, Heading)) &lt; 60)) &amp; (abs(deltaangle(225, Heading)) &lt; 35 + clamp(DS9 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR9" function="(smooth((abs(deltaangle(BG9, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP9" function="(K9 &amp; PR9 &amp; (DS9 &lt; PS8))" priority="0" />
@@ -228,6 +246,7 @@
     <Setter variable="PD9" function="(KP9 ? 225 : PD8)" priority="0" />
     <Setter variable="PP9" function="(KP9 ? BG9 : PP8)" priority="0" />
     <Setter variable="PU9" function="(KP9 ? 1 : PU8)" priority="0" />
+    <Setter variable="PI9" function="(KP9 ? 9 : PI8)" priority="0" />
     <Setter variable="KF9" function="(K9 &amp; (DS9 &lt; FS8))" priority="0" />
     <Setter variable="FS9" function="(KF9 ? SD9 : FS8)" priority="0" />
     <Setter variable="FL9" function="(KF9 ? LT9 : FL8)" priority="0" />
@@ -235,6 +254,7 @@
     <Setter variable="FD9" function="(KF9 ? 225 : FD8)" priority="0" />
     <Setter variable="FP9" function="(KF9 ? BG9 : FP8)" priority="0" />
     <Setter variable="FU9" function="(KF9 ? 1 : FU8)" priority="0" />
+    <Setter variable="FI9" function="(KF9 ? 9 : FI8)" priority="0" />
     <Setter variable="K10" function="((G10) &amp; (((SD10 &lt; 0) &amp; (abs(LT10) &lt; 300)) | (abs(deltaangle(BG10, Heading)) &lt; 60)) &amp; (abs(deltaangle(180, Heading)) &lt; 35 + clamp(DS10 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR10" function="(smooth((abs(deltaangle(BG10, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP10" function="(K10 &amp; PR10 &amp; (DS10 &lt; PS9))" priority="0" />
@@ -244,6 +264,7 @@
     <Setter variable="PD10" function="(KP10 ? 180 : PD9)" priority="0" />
     <Setter variable="PP10" function="(KP10 ? BG10 : PP9)" priority="0" />
     <Setter variable="PU10" function="(KP10 ? 1 : PU9)" priority="0" />
+    <Setter variable="PI10" function="(KP10 ? 10 : PI9)" priority="0" />
     <Setter variable="KF10" function="(K10 &amp; (DS10 &lt; FS9))" priority="0" />
     <Setter variable="FS10" function="(KF10 ? SD10 : FS9)" priority="0" />
     <Setter variable="FL10" function="(KF10 ? LT10 : FL9)" priority="0" />
@@ -251,6 +272,7 @@
     <Setter variable="FD10" function="(KF10 ? 180 : FD9)" priority="0" />
     <Setter variable="FP10" function="(KF10 ? BG10 : FP9)" priority="0" />
     <Setter variable="FU10" function="(KF10 ? 1 : FU9)" priority="0" />
+    <Setter variable="FI10" function="(KF10 ? 10 : FI9)" priority="0" />
     <Setter variable="K11" function="((G11) &amp; (((SD11 &lt; 0) &amp; (abs(LT11) &lt; 300)) | (abs(deltaangle(BG11, Heading)) &lt; 60)) &amp; (abs(deltaangle(345, Heading)) &lt; 35 + clamp(DS11 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR11" function="(smooth((abs(deltaangle(BG11, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP11" function="(K11 &amp; PR11 &amp; (DS11 &lt; PS10))" priority="0" />
@@ -260,6 +282,7 @@
     <Setter variable="PD11" function="(KP11 ? 345 : PD10)" priority="0" />
     <Setter variable="PP11" function="(KP11 ? BG11 : PP10)" priority="0" />
     <Setter variable="PU11" function="(KP11 ? 1 : PU10)" priority="0" />
+    <Setter variable="PI11" function="(KP11 ? 11 : PI10)" priority="0" />
     <Setter variable="KF11" function="(K11 &amp; (DS11 &lt; FS10))" priority="0" />
     <Setter variable="FS11" function="(KF11 ? SD11 : FS10)" priority="0" />
     <Setter variable="FL11" function="(KF11 ? LT11 : FL10)" priority="0" />
@@ -267,6 +290,7 @@
     <Setter variable="FD11" function="(KF11 ? 345 : FD10)" priority="0" />
     <Setter variable="FP11" function="(KF11 ? BG11 : FP10)" priority="0" />
     <Setter variable="FU11" function="(KF11 ? 1 : FU10)" priority="0" />
+    <Setter variable="FI11" function="(KF11 ? 11 : FI10)" priority="0" />
     <Setter variable="K12" function="((G12) &amp; (((SD12 &lt; 0) &amp; (abs(LT12) &lt; 300)) | (abs(deltaangle(BG12, Heading)) &lt; 60)) &amp; (abs(deltaangle(225, Heading)) &lt; 35 + clamp(DS12 / 50, 0, 55)))" priority="0" />
     <Setter variable="PR12" function="(smooth((abs(deltaangle(BG12, Heading)) &lt; 45) ? 1 : 0, 2) &gt; 0.5)" priority="0" />
     <Setter variable="KP12" function="(K12 &amp; PR12 &amp; (DS12 &lt; PS11))" priority="0" />
@@ -276,6 +300,7 @@
     <Setter variable="PD12" function="(KP12 ? 225 : PD11)" priority="0" />
     <Setter variable="PP12" function="(KP12 ? BG12 : PP11)" priority="0" />
     <Setter variable="PU12" function="(KP12 ? 1 : PU11)" priority="0" />
+    <Setter variable="PI12" function="(KP12 ? 12 : PI11)" priority="0" />
     <Setter variable="KF12" function="(K12 &amp; (DS12 &lt; FS11))" priority="0" />
     <Setter variable="FS12" function="(KF12 ? SD12 : FS11)" priority="0" />
     <Setter variable="FL12" function="(KF12 ? LT12 : FL11)" priority="0" />
@@ -283,13 +308,106 @@
     <Setter variable="FD12" function="(KF12 ? 225 : FD11)" priority="0" />
     <Setter variable="FP12" function="(KF12 ? BG12 : FP11)" priority="0" />
     <Setter variable="FU12" function="(KF12 ? 1 : FU11)" priority="0" />
-    <Setter variable="rwyPri" function="((PU12 &gt; 0.5)) ? 1 : 0" priority="0" />
-    <Setter variable="rwyOk" function="((PU12 &gt; 0.5) | (FU12 &gt; 0.5)) ? 1 : 0" priority="0" />
-    <Setter variable="SD" function="(((PU12 &gt; 0.5)) ? PS12 : FS12)" priority="0" />
-    <Setter variable="LT" function="(((PU12 &gt; 0.5)) ? PL12 : FL12)" priority="0" />
-    <Setter variable="TLA" function="(((PU12 &gt; 0.5)) ? PT12 : FT12)" priority="0" />
-    <Setter variable="HDG" function="(((PU12 &gt; 0.5)) ? PD12 : FD12)" priority="0" />
-    <Setter variable="BRG" function="(((PU12 &gt; 0.5)) ? PP12 : FP12)" priority="0" />
+    <Setter variable="FI12" function="(KF12 ? 12 : FI11)" priority="0" />
+    <Setter variable="SLK" function="(((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3)) ? (SLK + (1 - (SLK &gt; -0.5)) * ((clamp01((PU12 &gt; 0.5)) * PI12 + (1 - clamp01((PU12 &gt; 0.5))) * FI12) - SLK)) : (-1))" priority="0" />
+    <Setter variable="KM0" function="((abs(SLK - 0) &lt; 0.5) &amp; (SD0 &lt; 15000))" priority="0" />
+    <Setter variable="MS0" function="(KM0 ? SD0 : 9999999)" priority="0" />
+    <Setter variable="ML0" function="(KM0 ? LT0 : -9999999)" priority="0" />
+    <Setter variable="MT0" function="(KM0 ? 10 + 0.0524 * max(SD0, 0) : -9999999)" priority="0" />
+    <Setter variable="MD0" function="(KM0 ? 10 : 0)" priority="0" />
+    <Setter variable="MB0" function="(KM0 ? BG0 : 9999999)" priority="0" />
+    <Setter variable="MU0" function="(KM0 ? 1 : 0)" priority="0" />
+    <Setter variable="KM1" function="((abs(SLK - 1) &lt; 0.5) &amp; (SD1 &lt; 15000))" priority="0" />
+    <Setter variable="MS1" function="(KM1 ? SD1 : MS0)" priority="0" />
+    <Setter variable="ML1" function="(KM1 ? LT1 : ML0)" priority="0" />
+    <Setter variable="MT1" function="(KM1 ? 10 + 0.0524 * max(SD1, 0) : MT0)" priority="0" />
+    <Setter variable="MD1" function="(KM1 ? 40 : MD0)" priority="0" />
+    <Setter variable="MB1" function="(KM1 ? BG1 : MB0)" priority="0" />
+    <Setter variable="MU1" function="(KM1 ? 1 : MU0)" priority="0" />
+    <Setter variable="KM2" function="((abs(SLK - 2) &lt; 0.5) &amp; (SD2 &lt; 15000))" priority="0" />
+    <Setter variable="MS2" function="(KM2 ? SD2 : MS1)" priority="0" />
+    <Setter variable="ML2" function="(KM2 ? LT2 : ML1)" priority="0" />
+    <Setter variable="MT2" function="(KM2 ? 10 + 0.0524 * max(SD2, 0) : MT1)" priority="0" />
+    <Setter variable="MD2" function="(KM2 ? 190 : MD1)" priority="0" />
+    <Setter variable="MB2" function="(KM2 ? BG2 : MB1)" priority="0" />
+    <Setter variable="MU2" function="(KM2 ? 1 : MU1)" priority="0" />
+    <Setter variable="KM3" function="((abs(SLK - 3) &lt; 0.5) &amp; (SD3 &lt; 15000))" priority="0" />
+    <Setter variable="MS3" function="(KM3 ? SD3 : MS2)" priority="0" />
+    <Setter variable="ML3" function="(KM3 ? LT3 : ML2)" priority="0" />
+    <Setter variable="MT3" function="(KM3 ? 10 + 0.0524 * max(SD3, 0) : MT2)" priority="0" />
+    <Setter variable="MD3" function="(KM3 ? 220 : MD2)" priority="0" />
+    <Setter variable="MB3" function="(KM3 ? BG3 : MB2)" priority="0" />
+    <Setter variable="MU3" function="(KM3 ? 1 : MU2)" priority="0" />
+    <Setter variable="KM4" function="((abs(SLK - 4) &lt; 0.5) &amp; (SD4 &lt; 15000))" priority="0" />
+    <Setter variable="MS4" function="(KM4 ? SD4 : MS3)" priority="0" />
+    <Setter variable="ML4" function="(KM4 ? LT4 : ML3)" priority="0" />
+    <Setter variable="MT4" function="(KM4 ? 5 + 0.0524 * max(SD4, 0) : MT3)" priority="0" />
+    <Setter variable="MD4" function="(KM4 ? 50 : MD3)" priority="0" />
+    <Setter variable="MB4" function="(KM4 ? BG4 : MB3)" priority="0" />
+    <Setter variable="MU4" function="(KM4 ? 1 : MU3)" priority="0" />
+    <Setter variable="KM5" function="((abs(SLK - 5) &lt; 0.5) &amp; (SD5 &lt; 15000))" priority="0" />
+    <Setter variable="MS5" function="(KM5 ? SD5 : MS4)" priority="0" />
+    <Setter variable="ML5" function="(KM5 ? LT5 : ML4)" priority="0" />
+    <Setter variable="MT5" function="(KM5 ? 5 + 0.0524 * max(SD5, 0) : MT4)" priority="0" />
+    <Setter variable="MD5" function="(KM5 ? 230 : MD4)" priority="0" />
+    <Setter variable="MB5" function="(KM5 ? BG5 : MB4)" priority="0" />
+    <Setter variable="MU5" function="(KM5 ? 1 : MU4)" priority="0" />
+    <Setter variable="KM6" function="((abs(SLK - 6) &lt; 0.5) &amp; (SD6 &lt; 15000))" priority="0" />
+    <Setter variable="MS6" function="(KM6 ? SD6 : MS5)" priority="0" />
+    <Setter variable="ML6" function="(KM6 ? LT6 : ML5)" priority="0" />
+    <Setter variable="MT6" function="(KM6 ? 5 + 0.0524 * max(SD6, 0) : MT5)" priority="0" />
+    <Setter variable="MD6" function="(KM6 ? 80 : MD5)" priority="0" />
+    <Setter variable="MB6" function="(KM6 ? BG6 : MB5)" priority="0" />
+    <Setter variable="MU6" function="(KM6 ? 1 : MU5)" priority="0" />
+    <Setter variable="KM7" function="((abs(SLK - 7) &lt; 0.5) &amp; (SD7 &lt; 15000))" priority="0" />
+    <Setter variable="MS7" function="(KM7 ? SD7 : MS6)" priority="0" />
+    <Setter variable="ML7" function="(KM7 ? LT7 : ML6)" priority="0" />
+    <Setter variable="MT7" function="(KM7 ? 5 + 0.0524 * max(SD7, 0) : MT6)" priority="0" />
+    <Setter variable="MD7" function="(KM7 ? 260 : MD6)" priority="0" />
+    <Setter variable="MB7" function="(KM7 ? BG7 : MB6)" priority="0" />
+    <Setter variable="MU7" function="(KM7 ? 1 : MU6)" priority="0" />
+    <Setter variable="KM8" function="((abs(SLK - 8) &lt; 0.5) &amp; (SD8 &lt; 15000))" priority="0" />
+    <Setter variable="MS8" function="(KM8 ? SD8 : MS7)" priority="0" />
+    <Setter variable="ML8" function="(KM8 ? LT8 : ML7)" priority="0" />
+    <Setter variable="MT8" function="(KM8 ? 3 + 0.0524 * max(SD8, 0) : MT7)" priority="0" />
+    <Setter variable="MD8" function="(KM8 ? 45 : MD7)" priority="0" />
+    <Setter variable="MB8" function="(KM8 ? BG8 : MB7)" priority="0" />
+    <Setter variable="MU8" function="(KM8 ? 1 : MU7)" priority="0" />
+    <Setter variable="KM9" function="((abs(SLK - 9) &lt; 0.5) &amp; (SD9 &lt; 15000))" priority="0" />
+    <Setter variable="MS9" function="(KM9 ? SD9 : MS8)" priority="0" />
+    <Setter variable="ML9" function="(KM9 ? LT9 : ML8)" priority="0" />
+    <Setter variable="MT9" function="(KM9 ? 3 + 0.0524 * max(SD9, 0) : MT8)" priority="0" />
+    <Setter variable="MD9" function="(KM9 ? 225 : MD8)" priority="0" />
+    <Setter variable="MB9" function="(KM9 ? BG9 : MB8)" priority="0" />
+    <Setter variable="MU9" function="(KM9 ? 1 : MU8)" priority="0" />
+    <Setter variable="KM10" function="((abs(SLK - 10) &lt; 0.5) &amp; (SD10 &lt; 15000))" priority="0" />
+    <Setter variable="MS10" function="(KM10 ? SD10 : MS9)" priority="0" />
+    <Setter variable="ML10" function="(KM10 ? LT10 : ML9)" priority="0" />
+    <Setter variable="MT10" function="(KM10 ? 3 + 0.0524 * max(SD10, 0) : MT9)" priority="0" />
+    <Setter variable="MD10" function="(KM10 ? 180 : MD9)" priority="0" />
+    <Setter variable="MB10" function="(KM10 ? BG10 : MB9)" priority="0" />
+    <Setter variable="MU10" function="(KM10 ? 1 : MU9)" priority="0" />
+    <Setter variable="KM11" function="((abs(SLK - 11) &lt; 0.5) &amp; (SD11 &lt; 15000))" priority="0" />
+    <Setter variable="MS11" function="(KM11 ? SD11 : MS10)" priority="0" />
+    <Setter variable="ML11" function="(KM11 ? LT11 : ML10)" priority="0" />
+    <Setter variable="MT11" function="(KM11 ? 10 + 0.0524 * max(SD11, 0) : MT10)" priority="0" />
+    <Setter variable="MD11" function="(KM11 ? 345 : MD10)" priority="0" />
+    <Setter variable="MB11" function="(KM11 ? BG11 : MB10)" priority="0" />
+    <Setter variable="MU11" function="(KM11 ? 1 : MU10)" priority="0" />
+    <Setter variable="KM12" function="((abs(SLK - 12) &lt; 0.5) &amp; (SD12 &lt; 15000))" priority="0" />
+    <Setter variable="MS12" function="(KM12 ? SD12 : MS11)" priority="0" />
+    <Setter variable="ML12" function="(KM12 ? LT12 : ML11)" priority="0" />
+    <Setter variable="MT12" function="(KM12 ? 10 + 0.0524 * max(SD12, 0) : MT11)" priority="0" />
+    <Setter variable="MD12" function="(KM12 ? 225 : MD11)" priority="0" />
+    <Setter variable="MB12" function="(KM12 ? BG12 : MB11)" priority="0" />
+    <Setter variable="MU12" function="(KM12 ? 1 : MU11)" priority="0" />
+    <Setter variable="rwyPri" function="((MU12 &gt; 0.5) | (PU12 &gt; 0.5)) ? 1 : 0" priority="0" />
+    <Setter variable="rwyOk" function="((MU12 &gt; 0.5) | (PU12 &gt; 0.5) | (FU12 &gt; 0.5)) ? 1 : 0" priority="0" />
+    <Setter variable="SD" function="(clamp01((MU12 &gt; 0.5)) * MS12 + (1 - clamp01((MU12 &gt; 0.5))) * (clamp01((PU12 &gt; 0.5)) * PS12 + (1 - clamp01((PU12 &gt; 0.5))) * FS12))" priority="0" />
+    <Setter variable="LT" function="(clamp01((MU12 &gt; 0.5)) * ML12 + (1 - clamp01((MU12 &gt; 0.5))) * (clamp01((PU12 &gt; 0.5)) * PL12 + (1 - clamp01((PU12 &gt; 0.5))) * FL12))" priority="0" />
+    <Setter variable="TLA" function="(clamp01((MU12 &gt; 0.5)) * MT12 + (1 - clamp01((MU12 &gt; 0.5))) * (clamp01((PU12 &gt; 0.5)) * PT12 + (1 - clamp01((PU12 &gt; 0.5))) * FT12))" priority="0" />
+    <Setter variable="HDG" function="(clamp01((MU12 &gt; 0.5)) * MD12 + (1 - clamp01((MU12 &gt; 0.5))) * (clamp01((PU12 &gt; 0.5)) * PD12 + (1 - clamp01((PU12 &gt; 0.5))) * FD12))" priority="0" />
+    <Setter variable="BRG" function="(clamp01((MU12 &gt; 0.5)) * MB12 + (1 - clamp01((MU12 &gt; 0.5))) * (clamp01((PU12 &gt; 0.5)) * PP12 + (1 - clamp01((PU12 &gt; 0.5))) * FP12))" priority="0" />
     <Setter variable="trkNow" function="atan2(rate(Longitude), rate(Latitude))" priority="0" />
     <Setter variable="trkGd" function="((Time &gt; 0.5) &amp; (AltitudeAgl &gt; 20) &amp; (GS &gt; 25))" priority="0" />
     <Setter variable="trkUse" function="trkGd ? trkNow : Heading" priority="0" />
@@ -323,8 +441,8 @@
     <Setter variable="gndIdle" function="((airEver &gt; 0.5) &amp; (AltitudeAgl &lt; 3) &amp; (SD &lt; 15000)) ? 1 : 0" priority="0" />
     <Setter variable="thrErr" function="VAPP - IAS" priority="0" />
     <Setter variable="thrInt" function="clamp(sum(((((abs(thrErr) &lt; 12) &amp; (airFly &gt; 0.5)) ? thrErr * 0.03 : 0))), 0, 1)" priority="0" />
-    <Setter variable="thrGlide" function="clamp(0.01 * (altTgt - Altitude), 0, 0.3)" priority="0" />
-    <Setter variable="thrPI" function="clamp(0.10 * thrErr + thrInt + thrGlide, 0, 1)" priority="0" />
+    <Setter variable="thrPath" function="clamp(0.07 * vsCmd, 0, 0.6)" priority="0" />
+    <Setter variable="thrPI" function="clamp(0.10 * thrErr + thrInt + thrPath, 0, 1)" priority="0" />
     <Setter variable="thrRet" function="((thrErr &lt; -8) &amp; (airFly &gt; 0.5)) ? 1 : 0" priority="0" />
     <Setter variable="thrCmd" function="airFly * thrPI + (1 - airFly) * (1 - gndIdle) * Throttle" priority="0" />
     <Setter variable="spdBrk" function="((airEver &gt; 0.5) &amp; (AltitudeAgl &gt; 100) &amp; (SD &lt; 15000)) ? clamp(0.08 * (IAS - VAPP - 12), 0, 0.4) : 0" priority="0" />
@@ -349,7 +467,7 @@
         </Cockpit.State>
         <FloatingPart.State enabled="true" />
       </Part>
-      <Part id="1" partType="JFuselage-1" position="-8.957088E-05,3.443239,1.369772" rotation="0,0,0" drag="0.02056779,0,2.120742,3.756237,3.550143,3.54637" dragArea="0.02075088,0,2.702784,4.212369,4.11299,4.094379" materials="0,0,0,0,0,0" partCollisionResponse="Default">
+      <Part id="1" partType="JFuselage-1" position="-8.957088E-05,3.443239,1.369772" rotation="0,0,0" drag="0.02056779,0,2.120742,3.963843,3.77084,3.767074" dragArea="0.02075088,0,2.702784,4.399137,4.407043,4.388433" materials="0,0,0,0,0,0" partCollisionResponse="Default">
         <JFuselage.State version="4" offset="0,0,4.999998" mass="-9.265342E-09,-1.374795E-09,0,0.9619454" deadMassKg="0" buoyancy="0" fuelProportion="0.02">
           <Slice size="1,1" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
           <Slice size="1,1" cornerRadii="0.25,0.25,0.25,0.25" cornerStretch="False,False,False,False" cornerSamples="7,7,7,7" trapezium="0" edgeCurvature="0,0,0,0" edgeSamples="7,7,7,7" smoothing="True" cutting=",,," thickness="0.1" />
@@ -389,7 +507,7 @@
         <Transparency.State opacity="0.1" hideFront="true" hideBack="false" overrideHide="false" hideInside="false" />
         <FuelTank.State fuel="0" capacity="0" />
       </Part>
-      <Part id="10" partType="JWing-1" position="0.4999522,3.443244,0.8697729" rotation="0,0,0" drag="0.5190162,0.1011708,8.608719,8.607907,0,0.1068604" dragArea="1.141304,0.8715405,8.842649,8.702573,0,0.4633994" centerOfMass="1.937765,0.0672949,0.5292211" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
+      <Part id="10" partType="JWing-1" position="0.4999522,3.443244,0.8697729" rotation="0,0,0" drag="0.5190162,0.1018116,8.634119,8.683133,0,0.1068604" dragArea="1.141304,0.8767283,8.868588,8.777799,0,0.4633994" centerOfMass="1.937765,0.0672949,0.5292211" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
         <JWing.State chordSamples="10" colliderSamples="5" flipped="false" fuelFraction="0" version="3" disableWingtipVortices="false">
           <Slice position="0" airfoil="Semi-Symmetric" smoothJoin="true" offset="0.124927" scale="2.04945" bend="2" />
           <Slice position="6" smoothJoin="true" offset="0.2" scale="1.05" />
@@ -429,7 +547,7 @@
         <ControlSurfacePart.State style="StandardFlap" range="0,2" startPos="-0.55,-1.09" maxDeflection="30" dummyWingOffset="-0.25,-1" dummyWingScale="1.5,0.45" />
         <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="clamp(Yaw - 0.04 * YawRate, -1, 1)" zeroOnDeactivate="false" />
       </Part>
-      <Part id="22" partType="GearLeg-1" position="3.874302E-07,3.247931,3.29946" rotation="0,0,0" drag="0.04866286,0.04038285,0,0.01046699,0.03918411,0.0429062" dragArea="0.06225264,0.05447106,0,0.01556316,0.04838715,0.05210924" name="Hollow Gear Leg" materials="0,4,4,4,4,4,0,0,4,4,4" symmetryDisabled="true" partCollisionResponse="Default">
+      <Part id="22" partType="GearLeg-1" position="3.874302E-07,3.247931,3.29946" rotation="0,0,0" drag="0.04866286,0.04242742,0,0.01046699,0.03918411,0.0429062" dragArea="0.06225264,0.05706492,0,0.01556316,0.04838715,0.05210924" name="Hollow Gear Leg" materials="0,4,4,4,4,4,0,0,4,4,4" symmetryDisabled="true" partCollisionResponse="Default">
         <GearLeg.State gearLegStyle="GL-VFrameHollow" size="0.7" flipped="false" supportStrutType0="ST-PistonShort" supportStrutType1="" supportStrutType2="" torqueLinkType="TL-Slanted" suspensionTravel="0.3" torqueLinkLength="0.4" springForceScale="1" damperScale="1" catapultConnectorEnabled="false" catapultAcceleration="1" catapultNoseCompression="0" targetLaunchSpeed="175">
           <Variables />
         </GearLeg.State>
@@ -461,7 +579,7 @@
         <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="Yaw" />
         <InputController.State activationGroup="0" invert="false" min="-1" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? max(Brake, brkCmd) : Brake" />
       </Part>
-      <Part id="24" partType="GearBay-1" position="-8.957088E-05,2.943239,3.807272" rotation="270,180,0" drag="0.02239875,0.02082208,0.03368968,0.4724296,0.1113416,0.1354768" dragArea="0.07522195,0.07262809,0.0389079,0.5524939,0.2289088,0.2624076" materials="0,15,15,0,15,15" symmetryDisabled="true" partCollisionResponse="Default">
+      <Part id="24" partType="GearBay-1" position="-8.957088E-05,2.943239,3.807272" rotation="270,180,0" drag="0.02239875,0.02032366,0.03368968,0.4724296,0.1113416,0.1354768" dragArea="0.07522195,0.07003423,0.0389079,0.5524939,0.2289088,0.2624076" materials="0,15,15,0,15,15" symmetryDisabled="true" partCollisionResponse="Default">
         <PartTargeting.State targetMode="MultipleParts" partIds="2,1" />
         <GearBay.State cornerRadius="0.2" upperSpan="-0.2626635273300566828523749039,0.2370679334039887586883815721" lowerSpan="-0.2622090893323833775665849603,0.2878046832584513017305782920" height="1.3" depth="0.8" penetration="0.75" doorStyle="DoubleSideways" doorThickness="0.02" mirrored="false" autoHinge="true" hingePos="0.259997,0.06250069,0.001333006" hingeRot="0.7051642,0.01375544,0.01382589,0.7087758" hingePos2="-0.2622269,-0.5990788,0.001609621" hingeRot2="-0.0001177155,0.6734647,0.7392194,-0.0001292089" />
         <Animator.State animationDuration="2">
@@ -519,7 +637,7 @@
         <Canopy.State opacity="0.1" showInside="true" activationGroup="0" animationSpeed="1" dragWhenOpen="10" />
         <Canopy.State opacity="0.1" showInside="true" />
       </Part>
-      <Part id="29" partType="JWing-1" position="-0.4999516,3.443244,0.8697729" rotation="0,0,180" drag="0.5192401,0.1011707,8.609615,8.606107,0.1068604,0" dragArea="1.141304,0.8715405,8.842649,8.699979,0.4633994,0" centerOfMass="1.937748,0,0.5292987" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
+      <Part id="29" partType="JWing-1" position="-0.4999516,3.443244,0.8697729" rotation="0,0,180" drag="0.5192401,0.1018116,8.635018,8.683927,0.1068604,0" dragArea="1.141304,0.8767283,8.868588,8.777799,0.4633994,0" centerOfMass="1.937748,0,0.5292987" materials="0,2" symmetryDisabled="true" partCollisionResponse="Default">
         <JWing.State chordSamples="10" colliderSamples="5" flipped="true" fuelFraction="0" version="3" disableWingtipVortices="false">
           <Slice position="0" airfoil="Semi-Symmetric" smoothJoin="true" offset="0.1250098" scale="2.049615" bend="2" />
           <Slice position="6" smoothJoin="true" offset="0.2" scale="1.05" />
@@ -576,31 +694,31 @@
         <InputController.State activationGroup="0" invert="false" min="0" max="1" input="(clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? revOn : 0" zeroOnDeactivate="false" />
       </Part>
       <Part id="36" partType="Label-1" position="-0.2134525,3.899432,2.801952" rotation="270,1.147003E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="IAS{round(IAS)} GS{round(GS)} m/s" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.2" height="0.3" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="IAS{round(IAS)} GS{round(GS)} m/s" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.2" height="0.3" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="37" partType="Label-1" position="0.2206333,3.895061,2.801952" rotation="270,9.757412E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="ALT{round(AltitudeAgl)}m VS{round(vs * 10) / 10} m/s" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.2" height="0.3" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="ALT{round(AltitudeAgl)}m VS{round(vs * 10) / 10} m/s" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.2" height="0.3" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="13" partType="MFD-1" position="-8.957088E-05,3.82866,2.801952" rotation="270,1.366038E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2,3" symmetryDisabled="true" partCollisionResponse="Default">
         <Mfd.State targetingPod="0" />
       </Part>
       <Part id="19" partType="Label-1" position="-0.2154289,3.861835,2.801952" rotation="270,1.366038E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="TGT{round(((Activate7 &gt; 0) &amp; (rwyOk &gt; 0.5)) ? altTgt : altTgtH)}m{(lgWarn &gt; 0.5) ? &quot; LGUP!&quot; : &quot;&quot;}" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="0.8" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="TGT{round(((Activate7 &gt; 0) &amp; (rwyOk &gt; 0.5)) ? altTgt : altTgtH)}m{(lgWarn &gt; 0.5) ? &quot; LGUP!&quot; : &quot;&quot;}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="38" partType="Label-1" position="-0.2147644,3.819839,2.801952" rotation="270,1.366038E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="HDG{round(Heading)} TRK{round(trkUse)}" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="HDG{round(Heading)} TRK{round(trkUse)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="39" partType="Label-1" position="-0.2155014,3.775085,2.801952" rotation="270,1.366038E-05,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)} E{round(htExcess)}" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)} E{round(htExcess)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="40" partType="Label-1" position="0.224145,3.859498,2.801952" rotation="270,9.757412E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="XW{round(XW)} HW{round(HW)}" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="XW{round(XW)} HW{round(HW)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="41" partType="Label-1" position="0.2241773,3.821352,2.801952" rotation="270,9.757413E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="FU{round(Fuel)} TH{round(thrNow * 100)}" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="FU{round(Fuel)} TH{round(thrNow * 100)}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="42" partType="Label-1" position="0.22434,3.781678,2.801952" rotation="270,9.757413E-06,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2" symmetryDisabled="true" partCollisionResponse="Default">
-        <Label.State designText="G{round(LandingGear)} 8{round(clamp01(Activate8))} 7{round(clamp01(Activate7))}" fontName="Default" fontSize="0.3" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
+        <Label.State designText="G{round(LandingGear)} 8{round(clamp01(Activate8))} 7{round(clamp01(Activate7))}" fontName="Default" fontSize="0.2" horizontalAlignment="Center" verticalAlignment="Middle" width="1.19999993" height="0.15" outlineWidth="0.5" emissionDay="0" emissionNight="0" offset="0,0.006,0" rotation="90,0,0" gradient="None" curvature="0" curvatureDirection="Horizontal" />
       </Part>
       <Part id="43" partType="Switch-1" position="0.10417,3.943239,2.819968" rotation="0,0,6.403302E-06" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="0,1,2,3" symmetryDisabled="true" partCollisionResponse="Default">
         <Switch.State inputId="Activate7" />
@@ -641,9 +759,9 @@
       <Part id="49" partType="FormationLight" position="-0.03125603,3.944802,2.987654" rotation="0,270,0" drag="0,0,0,0,0,0" dragArea="0,0,0,0,0,0" materials="3,0" disableAircraftCollisions="true" scale="0.25,0.25,0.25" massScale="0" symmetryDisabled="true" partCollisionResponse="Default">
         <BeaconLight.State activationGroup="0" designerBlinkProgram="Steady" input="None" intensity="5" />
       </Part>
-      <Part id="50" partType="GearBay-1" position="-0.4375896,3.005739,0.494772" rotation="0,90,270" drag="0.01020252,0.0179841,0.02298873,0.2851926,0.08315586,0.1259891" dragArea="0.01037544,0.01815702,0.0259386,0.3683288,0.1116626,0.1916877" materials="0,15,15,15,15,15" symmetryId="2" partCollisionResponse="Default">
+      <Part id="50" partType="GearBay-1" position="0.5154972,3.005739,0.5037711" rotation="270,180,0" drag="0.01283707,0.01284724,0,0.08788607,0,0.4543137" dragArea="0.0129693,0.0129693,0,0.1763825,0,0.5359799" materials="0,15,15,15,15,15" symmetryId="2" partCollisionResponse="Default">
         <PartTargeting.State targetMode="MultipleParts" partIds="1" />
-        <GearBay.State cornerRadius="0.2" upperSpan="-0.300,0.300" lowerSpan="-0.300,0.300" height="0.8" depth="0.6" penetration="0.75" doorStyle="DoubleSideways" doorThickness="0.02" mirrored="false" autoHinge="true" hingePos="0.0625,0.4,0.45" hingeRot="0.7071068,0,0,0.7071068" hingePos2="-0.3,-0.34,-0.0625" hingeRot2="0,0.7071068,0.7071068,0" />
+        <GearBay.State cornerRadius="1" upperSpan="-0.2219993591209639229860961418,0.3780006408790360770139038582" lowerSpan="-0.5340019226371082310417115745,0.3780006408790360770139038582" height="0.907" depth="0.6" penetration="0.91" doorStyle="DoubleSideways" doorThickness="0.02" mirrored="false" autoHinge="true" hingePos="0.2010186,0.4076479,-0.054" hingeRot="0.7071068,-3.193662E-07,-3.193662E-07,0.7071068" hingePos2="-0.009497285,-0.4,0.546" hingeRot2="0,-0.7071068,-0.7071068,0" />
         <Animator.State animationDuration="2">
           <Keyframe name="Start" percent="0">
             <Pose element="door2" position="0,0,0" rotation="0,0,0,1" hasPosition="false" hasRotation="true" />
@@ -656,9 +774,9 @@
         </Animator.State>
         <InputController.State activationGroup="0" invert="false" min="1" max="0" input="0 - max(((clamp01(Activate7) * clamp01(boot * 2 - 1) * clamp01(rwyOk) &gt; 0.5) ? gearCmd : 0), 1 - LandingGear)" />
       </Part>
-      <Part id="51" partType="GearBay-1" position="0.437494,3.005739,0.494772" rotation="0,270,90" drag="0.01020252,0.01539024,0.02298873,0.2491736,0.1004308,0.06727494" dragArea="0.01037544,0.01556316,0.0259386,0.3242329,0.1600499,0.08002489" materials="0,15,15,15,15,15" symmetryId="2" partCollisionResponse="Default">
+      <Part id="51" partType="GearBay-1" position="-0.5155928,3.005739,0.5037711" rotation="270,180,0" drag="0.01037544,0.01283707,0,0.08784538,0.4543137,0" dragArea="0.01037544,0.0129693,0,0.1763825,0.5359799,0" materials="0,15,15,15,15,15" symmetryId="2" partCollisionResponse="Default">
         <PartTargeting.State targetMode="MultipleParts" partIds="1" />
-        <GearBay.State cornerRadius="0.2" upperSpan="-0.300,0.300" lowerSpan="-0.300,0.300" height="0.8" depth="0.6" penetration="0.75" doorStyle="DoubleSideways" doorThickness="0.02" mirrored="true" autoHinge="true" hingePos="-0.0625,0.4,0.4250835" hingeRot="0.7071068,0,0,0.7071068" hingePos2="0.3,-0.34,-0.06241643" hingeRot2="0,0.7071068,0.7071068,0" />
+        <GearBay.State cornerRadius="1" upperSpan="-0.3780006408790360770139038582,0.2219993591209639229860961418" lowerSpan="-0.3780006408790360770139038582,0.5340019226371082310417115745" height="0.907" depth="0.6" penetration="0.91" doorStyle="DoubleSideways" doorThickness="0.02" mirrored="true" autoHinge="true" hingePos="-0.2009395,0.4077136,-0.05400002" hingeRot="0.7071068,3.193194E-07,3.193194E-07,0.7071068" hingePos2="0.009497285,-0.4,0.546" hingeRot2="0,0.7071068,0.7071068,0" />
         <Animator.State animationDuration="2">
           <Keyframe name="Start" percent="0">
             <Pose element="door2" position="0,0,0" rotation="0,0,0,1" hasPosition="false" hasRotation="true" />
@@ -696,6 +814,8 @@
       <Connection partA="46" partB="1" attachPointsA="0" attachPointsB="6" />
       <Connection partA="1" partB="47" attachPointsA="1" attachPointsB="1" />
       <Connection partA="24" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="51" partB="1" attachPointsA="0" attachPointsB="6" />
+      <Connection partA="50" partB="1" attachPointsA="0" attachPointsB="6" />
       <Connection partA="7" partB="2" attachPointsA="1" attachPointsB="1" />
       <Connection partA="4" partB="5" attachPointsA="0" attachPointsB="1" />
       <Connection partA="16" partB="4" attachPointsA="0" attachPointsB="6" />
@@ -722,14 +842,12 @@
       <Connection partA="48" partB="49" attachPointsA="0" attachPointsB="0" />
     </Connections>
     <Bodies>
-      <Body partIds="3,1,2,7,8,4,5,6,20,21,16,17,18,12,22,23,14,15,31,10,11,25,26,34,29,30,32,33,35,36,13,19,38,39,37,40,42,41,43,45,46,47,24" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
+      <Body partIds="3,1,2,7,8,4,5,6,20,21,16,17,18,12,22,23,14,15,31,10,11,25,26,34,29,30,32,33,35,36,13,19,38,39,37,40,42,41,43,45,46,47,24,51,50" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
       <Body partIds="9" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
       <Body partIds="27" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
       <Body partIds="44" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
       <Body partIds="48" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
       <Body partIds="49" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
-      <Body partIds="50" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
-      <Body partIds="51" position="0,0,0" rotation="0,0,0" velocity="0,0,0" angularVelocity="0,0,0" />
     </Bodies>
   </Assembly>
   <Theme name="Custom">
@@ -758,5 +876,5 @@
     <Material style="SolidColor" color="FFFFFFFF" s="0" m="0" ed="1" en="1" />
     <Material style="SolidColor" color="171717FF" s="0.7" m="0.5" ed="0" en="0" />
   </Theme>
-  <CraftDrag drag="0.2737419,0.2737419,1,1,0.8244976,0.8244976" dragArea="4.396543,4.396543,30.544,30.544,13.24218,13.24218" />
+  <CraftDrag drag="0.2707522,0.2707522,1,1,0.8493664,0.8493664" dragArea="4.399137,4.399137,30.544,30.544,13.80037,13.80037" />
 </Aircraft>

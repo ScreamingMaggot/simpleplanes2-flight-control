@@ -94,6 +94,7 @@ for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
 RUN_PRI = 45
 _prevP = ("9999999", "-9999999", "-9999999", "0", "9999999", "0")
 _prevF = ("9999999", "-9999999", "-9999999", "0", "9999999", "0")
+_pPI, _pFI = "-1", "-1"                       # 两级制各自 carry 的“选中跑道序号”
 for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
     _pPS, _pPL, _pPT, _pPD, _pPP, _pPU = _prevP
     _pFS, _pFL, _pFT, _pFD, _pFP, _pFU = _prevF
@@ -109,6 +110,7 @@ for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
     PANEL.append(("PD%d" % _i, "(KP%d ? %d : %s)" % (_i, _hdg, _pPD)))
     PANEL.append(("PP%d" % _i, "(KP%d ? BG%d : %s)" % (_i, _i, _pPP)))
     PANEL.append(("PU%d" % _i, "(KP%d ? 1 : %s)" % (_i, _pPU)))
+    PANEL.append(("PI%d" % _i, "(KP%d ? %d : %s)" % (_i, _i, _pPI)))
     PANEL.append(("KF%d" % _i, "(K%d & (DS%d < %s))" % (_i, _i, _pFS)))
     PANEL.append(("FS%d" % _i, "(KF%d ? SD%d : %s)" % (_i, _i, _pFS)))
     PANEL.append(("FL%d" % _i, "(KF%d ? LT%d : %s)" % (_i, _i, _pFL)))
@@ -116,18 +118,49 @@ for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
     PANEL.append(("FD%d" % _i, "(KF%d ? %d : %s)" % (_i, _hdg, _pFD)))
     PANEL.append(("FP%d" % _i, "(KF%d ? BG%d : %s)" % (_i, _i, _pFP)))
     PANEL.append(("FU%d" % _i, "(KF%d ? 1 : %s)" % (_i, _pFU)))
+    PANEL.append(("FI%d" % _i, "(KF%d ? %d : %s)" % (_i, _i, _pFI)))
     _prevP = ("PS%d" % _i, "PL%d" % _i, "PT%d" % _i, "PD%d" % _i, "PP%d" % _i, "PU%d" % _i)
     _prevF = ("FS%d" % _i, "FL%d" % _i, "FT%d" % _i, "FD%d" % _i, "FP%d" % _i, "FU%d" % _i)
+    _pPI, _pFI = "PI%d" % _i, "FI%d" % _i
 _HAS_P = "(%s > 0.5)" % _prevP[5]
 _HAS_F = "(%s > 0.5)" % _prevF[5]
+_SELI  = "(clamp01(%s) * %s + (1 - clamp01(%s)) * %s)" % (_HAS_P, _pPI, _HAS_P, _pFI)  # 选中序号(算术选路)
+# ★v2.30 跑道锁定（用户 2026-09-26）：**进 7 且离地即锁定当拍所选跑道，锁到接地/松 7**——
+#   防止盘旋/漂移途中滑进**别的跑道走廊**⇒ 选择跳变、SD/LT/HDG 跳（用户实测"转着转着跑别的走廊"）。
+#   SLK=序号（自参照寄存器）；首帧 SLK=-1 取 _SELI，之后攥住；AltitudeAgl<3 或松 7 清 -1。
 PANEL += [
-    ("rwyPri", "(" + _HAS_P + ") ? 1 : 0"),
-    ("rwyOk",  "(" + _HAS_P + " | " + _HAS_F + ") ? 1 : 0"),
-    ("SD",  "((" + _HAS_P + ") ? %s : %s)" % (_prevP[0], _prevF[0])),
-    ("LT",  "((" + _HAS_P + ") ? %s : %s)" % (_prevP[1], _prevF[1])),
-    ("TLA", "((" + _HAS_P + ") ? %s : %s)" % (_prevP[2], _prevF[2])),
-    ("HDG", "((" + _HAS_P + ") ? %s : %s)" % (_prevP[3], _prevF[3])),
-    ("BRG", "((" + _HAS_P + ") ? %s : %s)" % (_prevP[4], _prevF[4])),
+    ("SLK", "(((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3))"
+            " ? (SLK + (1 - (SLK > -0.5)) * (%s - SLK)) : (-1))" % _SELI),
+]
+# 锁定期只放行 index==SLK 那条 ⇒ 输出被锁跑道的 SD/LT/TLA/HDG/BRG；未锁(7关)时退回两级制结果（算术选路，无嵌套三元）
+_prevM = ("9999999", "-9999999", "-9999999", "0", "9999999", "0")
+for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
+    _mS, _mL, _mT, _mD, _mB, _mU = _prevM
+    # ★锁带有效性（v2.30.1）：只放行"被锁序号 **且该跑道仍有效(SD<15000)**"那条 ⇒
+    #   被锁跑道一旦飞离(SD≥15km) 自动让位、回退实时两级制 ⇒ `O/E` 不再撒谎、ORB(E>100) 才能触发。
+    PANEL.append(("KM%d" % _i, "((abs(SLK - %d) < 0.5) & (SD%d < 15000))" % (_i, _i)))
+    PANEL.append(("MS%d" % _i, "(KM%d ? SD%d : %s)" % (_i, _i, _mS)))
+    PANEL.append(("ML%d" % _i, "(KM%d ? LT%d : %s)" % (_i, _i, _mL)))
+    PANEL.append(("MT%d" % _i, "(KM%d ? %d + 0.0524 * max(SD%d, 0) : %s)" % (_i, _el, _i, _mT)))
+    PANEL.append(("MD%d" % _i, "(KM%d ? %d : %s)" % (_i, _hdg, _mD)))
+    PANEL.append(("MB%d" % _i, "(KM%d ? BG%d : %s)" % (_i, _i, _mB)))
+    PANEL.append(("MU%d" % _i, "(KM%d ? 1 : %s)" % (_i, _mU)))
+    _prevM = ("MS%d" % _i, "ML%d" % _i, "MT%d" % _i, "MD%d" % _i, "MB%d" % _i, "MU%d" % _i)
+_HAS_M = "(%s > 0.5)" % _prevM[5]
+_mf = "clamp01(%s)" % _HAS_M        # 数值 0/1（算术选路用）
+_pf = "clamp01(%s)" % _HAS_P
+# 选值 = 锁(SLK) ? 被锁值 : (指向优先 ? P* : F*)  —— 全算术，不嵌套三元
+def _pick(vM, vP, vF):
+    return "(%s * %s + (1 - %s) * (%s * %s + (1 - %s) * %s))" % (
+        _mf, vM, _mf, _pf, vP, _pf, vF)
+PANEL += [
+    ("rwyPri", "(" + _HAS_M + " | " + _HAS_P + ") ? 1 : 0"),
+    ("rwyOk",  "(" + _HAS_M + " | " + _HAS_P + " | " + _HAS_F + ") ? 1 : 0"),
+    ("SD",  _pick(_prevM[0], _prevP[0], _prevF[0])),
+    ("LT",  _pick(_prevM[1], _prevP[1], _prevF[1])),
+    ("TLA", _pick(_prevM[2], _prevP[2], _prevF[2])),
+    ("HDG", _pick(_prevM[3], _prevP[3], _prevF[3])),
+    ("BRG", _pick(_prevM[4], _prevP[4], _prevF[4])),
     ("trkNow", "atan2(rate(Longitude), rate(Latitude))"),     # 当前地速航迹（rate() 开头几帧不可信，见 trkGd）
     ("trkGd",  "((Time > 0.5) & (AltitudeAgl > 20) & (GS > 25))"),
     ("trkUse", "trkGd ? trkNow : Heading"),                   # 起步/地面/低速 → 用机头方向当代理
@@ -160,6 +193,8 @@ PANEL += [
     ("tanG",     "clamp(GS * 0.12, 3, 7) / max(GS, 5)"),
     ("fldE",     "TLA - 0.0524 * max(SD, 0)"),
     ("htExcess", "(SD < 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0"),
+    # （M4 盘旋消高 ORB 已按用户 2026-09-26 指示**摘除**：四刀未过、根因是识别太窄；改走 A=离线整体重做，
+    #   见 ledger「M3+M4 合并定案」。此处曾放 ORB/bankUse，等 FT 四态做好再整体上。）
     # 道线自身以 0.0524·GS 下沉（85 m/s 时 4.5 m/s）⇒ 纯 P 追斜坡的稳态误差=斜率/增益=18 m
     # （app30 实测 +16~+18 m 恒定滞后，与 SC-5 当年同案）⇒ 补上前馈项。
     # v1.6：前馈**只对斜坡段有效**（`SD > 0`）——过阈值后道线是平的（`max(SD,0)`），
@@ -584,7 +619,7 @@ NumberToBool PID pow rate repeat round sign sin smooth sqrt sum tan""".split())
 # 显式放行的自参照 setter（2026-09-26 v2.17）：唯一合法用途 = 给 sum() 积分器加"退绕/清零"支，
 # 即 `sum(gate ? err : -self*k)` —— FT 没有内置抗饱和，自参照是"把积分按时间常数拉回 0"的唯一写法。
 # 除这个白名单外，自参照一律仍当错误（防手滑写出无定义的环）。
-ALLOW_SELFREF = {"cmdTheF_I"}
+ALLOW_SELFREF = {"cmdTheF_I", "SLK"}
 def check_refs(setters):
     defined = []
     for name, expr in setters:
