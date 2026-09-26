@@ -225,7 +225,8 @@ PANEL += [
     ("h2",   "clamp01(PH > 1.5)"),
     # 横向目标航向（算术选路，无嵌套三元）：ENROUTE=朝入口 AB；ORBIT=绕 FAF(4850,0)、圆心在右(LT=-200)的切线；FINAL=跑道航向 AH
     ("hCmd", "h0 * " + AB + " + h1 * (" + AH + " + atan2(0 - (" + AS + " - 4850), 0 - (" + AL + " + 200))) + h2 * " + AH),
-    ("bankApp", "(PH > 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -30, 30)) : bankTrk"),
+    # 盘旋需要更大坡度权限才能绕住 R=200m（数值：30°坡→半径发散 332→741；≥45°→有界）；普通横向仍回退 bankTrk(±30)
+    ("bankApp", "(PH > 0.5) ? (-clamp(deltaangle(trkUse, hCmd), -55, 55)) : bankTrk"),
 ]
 PANEL += [
     ("altTgt", "min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? (clamp01((PH > 0.5) & (PH < 1.5)) * (Altitude - 400) + (1 - clamp01((PH > 0.5) & (PH < 1.5))) * TLA) : 9999999)"),
