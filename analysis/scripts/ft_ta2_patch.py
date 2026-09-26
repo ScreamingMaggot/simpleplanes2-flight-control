@@ -281,8 +281,11 @@ PANEL += [
     # 一旦 `thrErr < −8`（比 VAPP 快 8 m/s 以上）律取得**下权**，可以直接收到 PI 值。
     # 两段用 thrRet 乘式拼平（不赌嵌套三元）：thrRet=0 ⇒ max(杆,PI)；thrRet=1 ⇒ PI。
     ("thrRet",  "((thrErr < -8) & (airFly > 0.5)) ? 1 : 0"),
-    ("thrCmd",  "airFly * (max(Throttle, thrPI) * (1 - thrRet) + thrPI * thrRet)"
-                " + (1 - airFly) * (1 - gndIdle) * Throttle"),
+    # 【v2.25·用户 2026-09-26 定：按 7 后油门完全交律接管】去掉 `max(Throttle, …)` 那层"杆位地板"——
+    #   空中段油门 = 纯 `thrPI`（飞行员推油门不再抬高它，自动油门独占）；接地=gndIdle 收光；
+    #   起飞前在地面(airFly=0、未 idle)仍交回油门杆（否则 7 按在地面推不动、没法起飞）。
+    #   注：整段仍受 APP_GATE(=7*boot*rwyOk) 选通 ⇒ 走廊外/未认场时油门照旧归杆，不会把巡航锁进近速。
+    ("thrCmd",  "airFly * thrPI + (1 - airFly) * (1 - gndIdle) * Throttle"),
     ("spdBrk",  "((airEver > 0.5) & (AltitudeAgl > 100) & (SD < 15000))"
                 " ? clamp(0.08 * (IAS - VAPP - 12), 0, 0.4) : 0"),
     # ★自动反推（本轮新捞到的**唯一可达的停止手段**）：`PropellerAssemblyScript` 第 352 行
@@ -443,6 +446,9 @@ GEAR_EXPR = "0 - max((" + APP_GATE + " ? gearCmd : 0), 1 - LandingGear)"
 #   巡航/正常起飞滑跑（未 arm 7）不掺和 —— 这正是"轮刹时间变短"的根：诊断期曾退回出厂裸轴、忘了重新接上。
 BRAKE_EXPR = APP_GATE + " ? max(Brake, brkCmd) : Brake"
 THR_EXPR = APP_GATE + " ? thrCmd : Throttle"
+# 实际施加到发动机的油门（进 7 时=自动油门 thrCmd，否则=油门杆）——做成一条 setter，
+#   引擎通道与座舱 TH 读数**都读它** ⇒ 显示的永远是真值，与杆位/是否接管无关。
+PANEL.append(("thrNow", THR_EXPR))
 # max(spdBrk, Brake)：律只能"加"减速板，飞行员随时能压更深 ⇒ 结构上不可能抢走手动权限
 BRK_EXPR = APP_GATE + " ? max(spdBrk, Brake) : Brake"
 # 反推：else 支给**常数 0**，不能写 `Disabled`（那是 IC 的"无输入"哨兵，当变量名引用可能未定义 ⇒ 整式编译失败）
@@ -451,7 +457,7 @@ REV_EXPR = APP_GATE + " ? revOn : 0"
 IC_CHANNELS = [
     ("GearLeg",           0, "LandingGear", GEAR_EXPR),    # ★腿的伸出量（前缀收窄：别连 GearBay 门一起改）
     ("GearBay",           0, "LandingGear", GEAR_EXPR),    # 前轮舱门跟着腿同步（`min=1 max=0` 同形，"Door Input"）
-    ("JPropEngineRadial", 0, "Throttle",    THR_EXPR),
+    ("JPropEngineRadial", 0, "Throttle",    "thrNow"),
     ("PropellerAssembly", 0, "VTOL",        "VTOL"),       # BladeAngle：Manual 才被消费，本机 Auto ⇒ 保持原厂
     ("PropellerAssembly", 1, "Disabled",    REV_EXPR),     # ★ReverseThrust：Auto 下才被消费 ⇒ 自动反推
     ("JWheelAssembly",    1, "Brake",       BRAKE_EXPR),   # ★轮刹（#0 是 "Turn"=转向，序号错位=打舵）
@@ -492,8 +498,8 @@ TXT_LIST = [
     "D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)}P{round(rwyPri)}",
     # 40：风的反演——侧风/顺逆风（IAS·sin/cos 蟹角 − GS），落地可落地性判据
     "XW{round(XW)} HW{round(HW)}",
-    # 41：油量% + 飞行员油门（长飞续航）
-    "FU{round(Fuel)} TH{round(Throttle * 100)}",
+    # 41：油量% + **实际发动机油门 thrNow**（进 7=自动油门值，否则=油门杆）——真值，非杆位
+    "FU{round(Fuel)} TH{round(thrNow * 100)}",
     # 42：构型与模式——起落架(1 收/0 放) + 8=持存稳定(应 1) + 7=降落模式(手动)
     "G{round(LandingGear)} 8{round(clamp01(Activate8))} 7{round(clamp01(Activate7))}",
 ]
