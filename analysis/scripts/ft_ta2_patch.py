@@ -154,6 +154,12 @@ PANEL += [
     #   而 cmdTheF* 只用 `vsErrH/altTgtH`（旋钮），`altTgt/TLA/拉平` 一个都不进 8 层通路 ⇒ **7/8 未耦合**。
     #   所以那个归因只对"7 挂着起飞"成立；本例 7 关 ⇒ 病在 **8 层环自身**，见 cmdTheF_I 处（积分饱和）。
     ("altTgt", "min(VTOL > 0 ? 500 + 1500 * VTOL : 500 + 500 * VTOL, (SD < 15000) ? TLA : 9999999)"),
+    # M4 只读第一步——"能否在最大下滑角内接住"的余量（米）：>0 = 现有五边接不住（太高/距离不够），需消高盘旋。
+    #   可下滑最陡正切 tanG = sinkMax/GS（与 vsCmd 下沉预算同式）；场高 el = TLA − 0.0524·max(SD,0)；
+    #   沿 γmax 从当前高度到入口能落到的地板 = el + SD·tanG ⇒ htExcess = 高出该地板多少。走廊外=0。
+    ("tanG",     "clamp(GS * 0.12, 3, 7) / max(GS, 5)"),
+    ("fldE",     "TLA - 0.0524 * max(SD, 0)"),
+    ("htExcess", "(SD < 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0"),
     # 道线自身以 0.0524·GS 下沉（85 m/s 时 4.5 m/s）⇒ 纯 P 追斜坡的稳态误差=斜率/增益=18 m
     # （app30 实测 +16~+18 m 恒定滞后，与 SC-5 当年同案）⇒ 补上前馈项。
     # v1.6：前馈**只对斜坡段有效**（`SD > 0`）——过阈值后道线是平的（`max(SD,0)`），
@@ -180,7 +186,9 @@ PANEL += [
     #   SC-3b v4.28 原话：『能瞬态落地的下沉 ≠ 能持续飞道的下沉』。修＝**下沉预算挂地速**：
     #        下钳 −clamp(GS·0.12, 3, 7)（最大约 7° 下滑角，低速收到 3）；上钳 +3（低于线允许缓爬回线，不再一路低到撞地）。
     #   拉平项(AGL<34)仍走 max(vsLine,−收光)，只在**正在下沉**时生效。
-    ("vsCmd",  "clamp((AltitudeAgl < 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), 3)"),
+    # 【v2.27 用户定：爬升预算 3→7（对"低于道线爬不回"掉海的修正）】上钳由死 `3` 改成**与下沉对称的
+    #   `clamp(GS·0.12, 3, 7)`**（巡航/进近速度下=7 m/s，低速自动收到 3，免低速猛拉机头）；仍只在 7 层通路消费。
+    ("vsCmd",  "clamp((AltitudeAgl < 34) ? max(vsLine, -clamp(AltitudeAgl * clamp(GS, 20, 90) / 480, 0.4, 6)) : vsLine, -clamp(GS * 0.12, 3, 7), clamp(GS * 0.12, 3, 7))"),
     ("vsErr",  "vsCmd - vs"),
     # 近区积分（|vsErr|<4 m/s 才积）：大误差段交给 P+前馈，避免积分攒大风车后顶着不放
     # 【v2.4】旧门 `abs(vsErr) < 4` 是**这场事故的直接原因**：撞水前 vsErr 一路 4.4，刚好卡在门外
@@ -273,7 +281,10 @@ PANEL += [
     # 而律自己能靠积分把油门顶到需要的位置（有界积分 + 死区 12 m/s 防风车）。
     ("thrErr",  "VAPP - IAS"),
     ("thrInt",  "clamp(sum(((((abs(thrErr) < 12) & (airFly > 0.5)) ? thrErr * 0.03 : 0))), 0, 1)"),
-    ("thrPI",   "clamp(0.10 * thrErr + thrInt, 0, 1)"),
+    # 【v2.27·用户 2026-09-26 "应用 B"：给"低于道线要爬"补能量】自动油门加**道线偏差前馈**——
+    #   低于 3° 线(altTgt>Altitude)才多给油（正项、带上限，免风车）；在线/高于线=0，不干扰正常下滑。
+    ("thrGlide","clamp(0.01 * (altTgt - Altitude), 0, 0.3)"),
+    ("thrPI",   "clamp(0.10 * thrErr + thrInt + thrGlide, 0, 1)"),
     # 三段用乘式拼平（不用嵌套三元，未证的语法不赌）：出生未飞=交还油门杆；空中=P 律；接地=0。
     # 【v2.5】`max(Throttle, thrPI)` 被实飞判死：用户五边把杆推到 1.00 ⇒ 律**零权限**，
     # IAS 被拉到 87.4 m/s（313 kph）、接地还有 48.9 —— "杆位是地板"在"该收油"的场景等于废掉油门环。
@@ -457,7 +468,7 @@ REV_EXPR = APP_GATE + " ? revOn : 0"
 IC_CHANNELS = [
     ("GearLeg",           0, "LandingGear", GEAR_EXPR),    # ★腿的伸出量（前缀收窄：别连 GearBay 门一起改）
     ("GearBay",           0, "LandingGear", GEAR_EXPR),    # 前轮舱门跟着腿同步（`min=1 max=0` 同形，"Door Input"）
-    ("JPropEngineRadial", 0, "Throttle",    "thrNow"),
+    ("JPropEngineRadial", 0, "Throttle",    "(thrNow)"),
     ("PropellerAssembly", 0, "VTOL",        "VTOL"),       # BladeAngle：Manual 才被消费，本机 Auto ⇒ 保持原厂
     ("PropellerAssembly", 1, "Disabled",    REV_EXPR),     # ★ReverseThrust：Auto 下才被消费 ⇒ 自动反推
     ("JWheelAssembly",    1, "Brake",       BRAKE_EXPR),   # ★轮刹（#0 是 "Turn"=转向，序号错位=打舵）
@@ -495,7 +506,7 @@ TXT_LIST = [
     "HDG{round(Heading)} TRK{round(trkUse)}",
     # 39：到选中跑道入口的距离(km) + 横偏(m)（长飞末段接管用）
     # 39：到选中跑道入口的距离(km) + 横偏(m) + **选场态**（Ok=有候选 / P=指向优先命中，验 M1 两级制）
-    "D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)}P{round(rwyPri)}",
+    "D{round(SD / 1000)}k XT{round(xtrk)} O{round(rwyOk)} E{round(htExcess)}",
     # 40：风的反演——侧风/顺逆风（IAS·sin/cos 蟹角 − GS），落地可落地性判据
     "XW{round(XW)} HW{round(HW)}",
     # 41：油量% + **实际发动机油门 thrNow**（进 7=自动油门值，否则=油门杆）——真值，非杆位
@@ -770,6 +781,7 @@ def main():
         xml = patch_surface(xml, pid, RUD)
     # 构型/能量通道：全部按 (partType, IC 序号) 定位（见 IC_CHANNELS 的源码判决表）
     import re as _re
+    _SETTERS = {n for n, _ in PANEL}   # 我们自己定义的 setter 名：盘上 IC 现值是它们 ⇒ 是本工具的上一版，合法
     for _pt, _idx, _bare, _val in IC_CHANNELS:
         _hit = [0]
         def _ic(m, _idx=_idx, _bare=_bare, _val=_val, _hit=_hit):
@@ -783,7 +795,7 @@ def main():
             # 本工具迭代过十几版式子，每一版都可能是盘上的旧值；只认"当前这一版"的守卫会在改版时
             # 把自己的上一版当成"外来物"拒改（本轮差点又踩）。而真正要拦的是**序号错位**——
             # 那必然表现为"一个别的裸轴名"（轮件 #0 的 `Yaw`/`-Yaw`），它是不含运算符的纯标识符。
-            if _re.match(r"^[A-Za-z_]\w*$", old) and old != _bare:
+            if _re.match(r"^[A-Za-z_]\w*$", old) and old != _bare and old not in _SETTERS:
                 raise RuntimeError("%s 第 %d 个 IC 现值是裸轴名 %r（期望 %r）⇒ 序号错位，拒改"
                                    "（防把能量式写到转向通道）" % (_pt, _idx, old, _bare))
             new_ic = ic.group(0).replace('input="%s"' % old, 'input="%s"' % esc(_val), 1)
