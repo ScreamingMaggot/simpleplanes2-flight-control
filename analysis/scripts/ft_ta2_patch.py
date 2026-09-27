@@ -209,8 +209,12 @@ PANEL += [
     #   可下滑最陡正切 tanG = sinkMax/GS（与 vsCmd 下沉预算同式）；场高 el = TLA − 0.0524·max(SD,0)；
     #   沿 γmax 从当前高度到入口能落到的地板 = el + SD·tanG ⇒ htExcess = 高出该地板多少。走廊外=0。
     ("tanG",     "clamp(GS * 0.12, 3, 7) / max(GS, 5)"),
-    ("fldE",     "TLA - 0.0524 * max(SD, 0)"),
-    ("htExcess", "(SD < 15000) ? max(0, (Altitude - fldE) - SD * tanG) : 0"),
+    # 【v2.38 修硬 bug】`fldE` 直接用 `max(SD,0)` —— SD 为哨兵/中间伪值时会把场高顶到负几十万，
+    #   使 `Altitude-fldE` 爆表（用户实测 E=849 @30m 高度，物理不可能）。加**合法域门**：SD∈(0,15000) 才用，
+    #   否则 fldE=TLA（等价于"不在走廊"），且 htExcess 亦仅在合法 SD 内计算。
+    ("sdOk",  "clamp01((SD > 0) & (SD < 15000))"),
+    ("fldE",  "TLA - 0.0524 * sdOk * max(SD, 0)"),
+    ("htExcess", "sdOk * max(0, (Altitude - fldE) - SD * tanG)"),
     # （M4 盘旋消高 ORB 已按用户 2026-09-26 指示**摘除**：四刀未过、根因是识别太窄；改走 A=离线整体重做，
     #   见 ledger「M3+M4 合并定案」。此处曾放 ORB/bankUse，等 FT 四态做好再整体上。）
     # 道线自身以 0.0524·GS 下沉（85 m/s 时 4.5 m/s）⇒ 纯 P 追斜坡的稳态误差=斜率/增益=18 m

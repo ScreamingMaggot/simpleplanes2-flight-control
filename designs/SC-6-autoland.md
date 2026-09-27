@@ -1550,3 +1550,8 @@ python analysis/scripts/parse_telemetry.py        # 出 telemetry*.csv + telemet
 证据（cid=66511，APPR 解析修好后）：`LT≈+357→474`、`TLA≈490`、`BRG≈−80`（入口在正右）、`phiCmd=bankTrk=−30`（满左舵）⇒ 律拿五边律去"咬一条横偏 400m、入口侧向的跑道中线" ⇒ 大左转撞山。`SLK=-1`（锁定未生效/该局非 v2.36）。
 改：`bankTrk` 分段——`xfLt=|LT|>250` 且 `hFar=SD>4850` 时用缓转 `hLt=LEAD−clamp(LT/200,−40,40)`（指向中线前方点，限 ±30），否则回原五边；避免对侧向目标满舵。
 **工具修**：`ta2_flight.py --appr` 的 APPR 值下标改回 `1+k`（r[0]=t）并去掉会误判的自动偏移探测（addon 与 HDR 已核对一致：40 值）。--apply 面板 498。
+
+## v2.38（2026-09-27）**修硬 bug**：`fldE/htExcess` 未防哨兵 ⇒ E 爆表（用户实测 E=849 @30m 高度）
+
+`fldE = TLA - 0.0524*max(SD,0)`：SD 为哨兵或 carry 切换拍的中间伪值时，把"场高"顶到负几十万 ⇒ `Altitude-fldE` 爆表 ⇒ E 读出 849（远超任何 3° 线余量，物理不可能）。**这就是"控制律本身有问题"的真身**。
+改：加 `sdOk=clamp01((SD>0)&(SD<15000))`；`fldE=TLA-0.0524*sdOk*max(SD,0)`；`htExcess=sdOk*max(0,(Altitude-fldE)-SD*tanG)`。非法 SD 下 E=0。--apply。
