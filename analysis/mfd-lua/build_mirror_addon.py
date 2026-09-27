@@ -86,7 +86,7 @@ local function _appr_log()
 	local ok, err = pcall(function()
 		local V = _ftmirror.step()
 		print(string.format("APPR,@@FMT@@",
-			_cidn, craft.Time,
+			_num(_cidn), _num(craft.Time),
 			@@ARGS@@))
 	end)
 	if ok then
@@ -127,18 +127,26 @@ def harden_proxy_reads(src):
     lines = src.split("\n")
     out, fixed = [], []
     pat = re.compile(r'^(\s*)local\s+(\w+)\s*=\s*craft\.Controls\.(\w+)\s+or\s+(.+?)\s*$')
-    already = re.compile(r'pcall\(function\(\)\s*\w+\s*=\s*craft\.Controls\.')
+    # ★形如 `pcall(function() x = craft.Controls.F ... end)` 的**单行**形态：整体自闭合，
+    #   绝不能据此进入"块内"状态。第一版把这种单行 pcall 当成块起点 ⇒ 从第 63 行起
+    #   整个文件被吞掉、`ft8_vtol` 那行永远轮不到 ⇒ 加固静默失效（闸红、构建死）。
+    pcall_oneline = re.compile(r'pcall\(function\(\).*end\)\s*$')
+    #   多行形态的**起手行**：`pcall(function()` 后面没有 `end`。
+    pcall_open = re.compile(r'pcall\(function\(\)\s*$')
     in_pcall_block = False
     for n, line in enumerate(lines, 1):
-        if already.search(line):
-            in_pcall_block = True
-            out.append(line)
-            continue
         if in_pcall_block:
             # pcall 块结束行（`end)`）之后恢复正常扫描
             if re.match(r'^\s*end\)\s*$', line):
                 in_pcall_block = False
             out.append(line)
+            continue
+        if pcall_open.search(line):
+            in_pcall_block = True
+            out.append(line)
+            continue
+        if pcall_oneline.search(line):
+            out.append(line)          # 自闭合，不进块状态
             continue
         m = pat.match(line)
         if m:
@@ -322,6 +330,16 @@ def check_appr_row(src):
     if "_appr_hdr()" not in src:
         probs.append("表头函数 _appr_hdr() 从未被调用（CSV 会没有列名）")
 
+    # ★★重复注入闸：调用点不在标记块内 ⇒ 剥块剥不掉它，每次重跑 +1。
+    #   实测：14 次构建后 `_appr_log()` 出现 14 处 ⇒ 每帧求值 14 遍（且每帧打 14 行）。
+    #   必须**恰好一次**。
+    n_log = len(re.findall(r"^\s*_appr_log\(\)\s*$", src, re.M))
+    n_hdr = len(re.findall(r"^\s*_appr_hdr\(\)\s*$", src, re.M))
+    if n_log != 1:
+        probs.append("`_appr_log()` 调用点 %d 处（必须恰好 1）⇒ 幂等剥点失败" % n_log)
+    if n_hdr != 1:
+        probs.append("`_appr_hdr()` 调用点 %d 处（必须恰好 1）" % n_hdr)
+
     # ★分流前缀闸：parser 靠**行首标记**分流（TEL,/APPR,）。数据行若不带 `APPR,`
     #   前缀，parse_telemetry 永远匹配不到 ⇒ **整条流静默消失**（第一版正是如此：
     #   只有表头是 APPRHDR，数据行是裸 `%d,%.3f,…`）。此处与 parser 的期望逐字对齐。
@@ -330,6 +348,21 @@ def check_appr_row(src):
                      % fm.group(1)[:24])
     if not hm.group(1).startswith("APPRHDR,"):
         probs.append("表头未以 `APPRHDR,` 开头")
+
+    # ★★前缀实参闸：`_num` 只护了 38 个 V 值，**前缀的 _cidn / craft.Time 是裸的**。
+    #   实测事故：`bad argument #2 to 'format' (number expected, got nil)` —— 镜像求值
+    #   已经全部通过、只差这一跳被 nil 打死（评估通过+打印失败，连续 6 架次 0 行 APPR）。
+    #   判据：格式串里 `%d/%.Nf` 各需要一个数字实参，**每一个都必须走 _num()**。
+    body = blk[:blk.find("end)")] if "end)" in blk else blk
+    nspec = len(specs)
+    safeguarded = len(re.findall(r"_num\(", body))
+    if nspec != safeguarded:
+        probs.append("格式符 %d 个但 _num() 只护了 %d 个实参 ⇒ 有裸实参（nil 会打死打印）"
+                     % (nspec, safeguarded))
+    for bad in ("\n\t\t\t_cidn, craft.Time,",
+                "\n\t\t\tcraft.Time,"):
+        if bad in body:
+            probs.append("前缀实参 %r 未受 _num() 保护" % bad.strip())
 
     if probs:
         raise SystemExit("APPR 行完整性闸不过：%s" % "；".join(probs))
@@ -370,6 +403,13 @@ def main():
     # 幂等：先剥掉上一次的注入块（以标记注释界定）
     src = re.sub(r"\n-- ==== 面板镜像（自动生成.*?-- ==== /面板镜像 ====\n", "\n", src, flags=re.S)
     src = re.sub(r"\n-- ==== APPR：FT 进近面板内部量落盘.*?-- ==== /APPR ====\n", "\n", src, flags=re.S)
+    # ★★ 关键：**调用点不在标记块内**，必须单独剥。否则每次重跑都追加一个
+    #   `_appr_log()` ⇒ 14 次构建后每帧调用 14 次（实测：1994 行的 addon 里有 14 处），
+    #   且 `_appr_hdr()` 也重复 14 次（表头重复打印）。这是"幂等"只做了块、漏了点的后果。
+    src = re.sub(r"\n[ \t]*_appr_log\(\)[ \t]*(?=\n)", "", src)
+    src = re.sub(r"\n[ \t]*_appr_hdr\(\)[ \t]*(?=\n)", "", src)
+    #   连带把上一次注入留下的空行也清掉，避免每轮都长高一行
+    src = re.sub(r"\n{3,}(?=\t*_?print\(|local _origInitialize)", "\n\n", src)
 
     mirror_mod = "-- ==== 面板镜像（自动生成：ft_mirror_gen.py）====\n" + \
                  "local _ftmirror = (function()\n" + body + "\nend)()\n-- ==== /面板镜像 ====\n"
@@ -390,13 +430,16 @@ def main():
     if not m2:
         sys.exit("APPR 调用点未找到（FT8 打印块定位失败）")
     indent = m2.group(1)
-    src = src[:m2.end(1)] + "\n%s_appr_log()\n" % indent + src[m2.end(1):]
+    # ★只插 `%s_appr_log()\n`，**不额外加前导 \n**：m2.end(1) 已落在既有换行之后，
+    #   再加一个 \n 就是每轮多一行空行（实测：内容 diff 为空、行数每轮 +1）。
+    src = src[:m2.end(1)] + "%s_appr_log()\n" % indent + src[m2.end(1):]
 
     # 表头必须在 initialize() 里打一次（否则 CSV 无列名）。挂到 TELHDR 那行之后。
-    m3 = re.search(r"(\n\t*print\(\"TELHDR[^\n]*\n)", src)
+    m3 = re.search(r"\n(\t*)print\(\"TELHDR[^\n]*\n", src)
     if not m3:
         sys.exit("TELHDR 定位失败（无法挂 APPRHDR）")
-    src = src[:m3.end(1)] + "\t_appr_hdr()\n" + src[m3.end(1):]
+    # ★同理：用**实际缩进**且不加前导 \n（硬写 "\t" 会造成每轮 2 字节漂移）。
+    src = src[:m3.end(1)] + "%s_appr_hdr()\n" % m3.group(1) + src[m3.end(1):]
 
     gen.check_lua_syntax(src, "telemetry-addon+mirror")
     check_definition_order(src)

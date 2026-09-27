@@ -3,45 +3,6 @@
 -- 输出行格式：TEL,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw
 -- 注意：视野外/飞机被剔除时 MFD 可能停更，采样间隔以每行自带的 t 为准（不要假设等间隔）
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- ==== 面板镜像（自动生成：ft_mirror_gen.py）====
 local _ftmirror = (function()
 --[[ ==========================================================================
@@ -694,7 +655,7 @@ local function _appr_log()
 	local ok, err = pcall(function()
 		local V = _ftmirror.step()
 		print(string.format("APPR,%d,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-			_cidn, craft.Time,
+			_num(_cidn), _num(craft.Time),
 			_num(V["SD"]),
 			_num(V["LT"]),
 			_num(V["TLA"]),
@@ -761,21 +722,8 @@ local _cidn = nil          -- 本机身份号（首帧位置派生；一局面�
 
 function initialize()
 	if _origInitialize then _origInitialize() end
-	print("TELHDR,cid,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw,flp")
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
-	_appr_hdr()
+_appr_hdr()
+print("TELHDR,cid,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw,flp")
 end
 
 -- ==== FT-ONLY 编译开关（2026-09-25，用户裁定）================================
@@ -851,15 +799,7 @@ function update()
 	local ft8_vsLim  = (craft.IAS > 42) and 20 or 5
 	local ft8_vs     = (ft8_altprev == nil) and 0 or ((craft.Altitude - ft8_altprev) / math.max(dt, 1e-3))
 	ft8_altprev      = craft.Altitude
-	-- ★★2026-09-27 事故修复：`craft.Controls.VTOL` **在代理上不存在，裸读抛异常**
-	--   （`cannot access field VTOL of userdata<CraftControlsProxy>`）⇒ 异常穿透 update()
-	--   ⇒ 整个 update() 中断 ⇒ TEL/APPR **双双零数据**（三个架次的代价）。
-	--   这行代码是既有的 FT8 复算，长期被 FT_ONLY/条件门挡着没执行到；把 _appr_log()
-	--   挂进 update() 后改变了执行路径，把它踩响。**`or 0` 兜底对此无效**——userdata
-	--   访问不存在的字段是**抛错**，不是返回 nil，`or` 根本执行不到。
-	--   修：pcall 取值 + 失败落 0（该量仅供观测；VTOL 恒 0 ⇒ altTgt 退化为 500+500*0=500，与面板
-	--   的 VTOL=0 情形一致，不影响其它列）。
-	local ft8_vtol   = 0
+	local ft8_vtol = 0
 	pcall(function() ft8_vtol = craft.Controls.VTOL or 0 end)
 	local ft8_altTgt = (ft8_vtol > 0) and (500 + 1500 * ft8_vtol) or (500 + 500 * ft8_vtol)
 	local ft8_vsCmd  = math.max(-ft8_vsLim, math.min(ft8_vsLim, 0.25 * (ft8_altTgt - craft.Altitude)))
@@ -885,33 +825,6 @@ function update()
 			craft.AngleOfAttack, craft.AngleOfSlip, craft.GForce, craft.VerticalG,
 			craft.Fuel,
 			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
-		
-		_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
-_appr_log()
-
 _appr_log()
 -- FT8 定高环内部量：目标高/实际高/爬升率指令/误差/P指令/I积分/合成指令/油门杆
 		print(string.format("FT8,%d,%.3f,%.1f,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f",
