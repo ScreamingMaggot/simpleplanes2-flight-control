@@ -125,12 +125,24 @@ for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
 _HAS_P = "(%s > 0.5)" % _prevP[5]
 _HAS_F = "(%s > 0.5)" % _prevF[5]
 _SELI  = "(clamp01(%s) * %s + (1 - clamp01(%s)) * %s)" % (_HAS_P, _pPI, _HAS_P, _pFI)  # 选中序号(算术选路)
+# ★v2.36 用户定 B：锁定判据改 **"入口在前方且轴向对齐最好"**（|Δ(跑道HDG,机头)| 最小），不再"最近"。
+#   病（cid=92220）：用户对准 A 按 7，A 不在 60° 锥（斜一点就不认）⇒ 退回"最近"抓了 8.6km 外偏侧的另一条→左转飞别处。
+#   做法：AX 链在"入口在前方(SD>0) 且 到入口<15km"的候选里取 **|Δ(hdg,Heading)| 最小** 者，得序号 _AXI。
+_pAD, _pAX = "9999", "-1"
+for _i, (_nm, _lat, _lon, _hdg, _el) in enumerate(RWYS):
+    PANEL.append(("AK%d" % _i, "((SD%d > 0) & (DS%d < 15000) & (abs(deltaangle(%d, Heading)) < %s))"
+                  % (_i, _i, _hdg, _pAD)))
+    PANEL.append(("AD%d" % _i, "(AK%d ? abs(deltaangle(%d, Heading)) : %s)" % (_i, _hdg, _pAD)))
+    PANEL.append(("AX%d" % _i, "(AK%d ? %d : %s)" % (_i, _i, _pAX)))
+    _pAD, _pAX = "AD%d" % _i, "AX%d" % _i
+_AXI = _pAX                                                   # 轴向最对齐且在前方的跑道序号（-1=无）
 # ★v2.30 跑道锁定（用户 2026-09-26）：**进 7 且离地即锁定当拍所选跑道，锁到接地/松 7**——
 #   防止盘旋/漂移途中滑进**别的跑道走廊**⇒ 选择跳变、SD/LT/HDG 跳（用户实测"转着转着跑别的走廊"）。
 #   SLK=序号（自参照寄存器）；首帧 SLK=-1 取 _SELI，之后攥住；AltitudeAgl<3 或松 7 清 -1。
 PANEL += [
     ("SLK", "(((clamp01(Activate7) > 0.5) & (AltitudeAgl > 3))"
-            " ? (SLK + (1 - (SLK > -0.5)) * (%s - SLK)) : (-1))" % _SELI),
+            " ? (SLK + (1 - (SLK > -0.5)) * ((clamp01(" + _AXI + " > -0.5) * " + _AXI
+            + " + (1 - clamp01(" + _AXI + " > -0.5)) * " + _SELI + ") - SLK)) : (-1))"),
 ]
 # 锁定期只放行 index==SLK 那条 ⇒ 输出被锁跑道的 SD/LT/TLA/HDG/BRG；未锁(7关)时退回两级制结果（算术选路，无嵌套三元）
 _prevM = ("9999999", "-9999999", "-9999999", "0", "9999999", "0")

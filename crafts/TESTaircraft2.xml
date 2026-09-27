@@ -309,7 +309,46 @@
     <Setter variable="FP12" function="(KF12 ? BG12 : FP11)" priority="0" />
     <Setter variable="FU12" function="(KF12 ? 1 : FU11)" priority="0" />
     <Setter variable="FI12" function="(KF12 ? 12 : FI11)" priority="0" />
-    <Setter variable="SLK" function="(((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3)) ? (SLK + (1 - (SLK &gt; -0.5)) * ((clamp01((PU12 &gt; 0.5)) * PI12 + (1 - clamp01((PU12 &gt; 0.5))) * FI12) - SLK)) : (-1))" priority="0" />
+    <Setter variable="AK0" function="((SD0 &gt; 0) &amp; (DS0 &lt; 15000) &amp; (abs(deltaangle(10, Heading)) &lt; 9999))" priority="0" />
+    <Setter variable="AD0" function="(AK0 ? abs(deltaangle(10, Heading)) : 9999)" priority="0" />
+    <Setter variable="AX0" function="(AK0 ? 0 : -1)" priority="0" />
+    <Setter variable="AK1" function="((SD1 &gt; 0) &amp; (DS1 &lt; 15000) &amp; (abs(deltaangle(40, Heading)) &lt; AD0))" priority="0" />
+    <Setter variable="AD1" function="(AK1 ? abs(deltaangle(40, Heading)) : AD0)" priority="0" />
+    <Setter variable="AX1" function="(AK1 ? 1 : AX0)" priority="0" />
+    <Setter variable="AK2" function="((SD2 &gt; 0) &amp; (DS2 &lt; 15000) &amp; (abs(deltaangle(190, Heading)) &lt; AD1))" priority="0" />
+    <Setter variable="AD2" function="(AK2 ? abs(deltaangle(190, Heading)) : AD1)" priority="0" />
+    <Setter variable="AX2" function="(AK2 ? 2 : AX1)" priority="0" />
+    <Setter variable="AK3" function="((SD3 &gt; 0) &amp; (DS3 &lt; 15000) &amp; (abs(deltaangle(220, Heading)) &lt; AD2))" priority="0" />
+    <Setter variable="AD3" function="(AK3 ? abs(deltaangle(220, Heading)) : AD2)" priority="0" />
+    <Setter variable="AX3" function="(AK3 ? 3 : AX2)" priority="0" />
+    <Setter variable="AK4" function="((SD4 &gt; 0) &amp; (DS4 &lt; 15000) &amp; (abs(deltaangle(50, Heading)) &lt; AD3))" priority="0" />
+    <Setter variable="AD4" function="(AK4 ? abs(deltaangle(50, Heading)) : AD3)" priority="0" />
+    <Setter variable="AX4" function="(AK4 ? 4 : AX3)" priority="0" />
+    <Setter variable="AK5" function="((SD5 &gt; 0) &amp; (DS5 &lt; 15000) &amp; (abs(deltaangle(230, Heading)) &lt; AD4))" priority="0" />
+    <Setter variable="AD5" function="(AK5 ? abs(deltaangle(230, Heading)) : AD4)" priority="0" />
+    <Setter variable="AX5" function="(AK5 ? 5 : AX4)" priority="0" />
+    <Setter variable="AK6" function="((SD6 &gt; 0) &amp; (DS6 &lt; 15000) &amp; (abs(deltaangle(80, Heading)) &lt; AD5))" priority="0" />
+    <Setter variable="AD6" function="(AK6 ? abs(deltaangle(80, Heading)) : AD5)" priority="0" />
+    <Setter variable="AX6" function="(AK6 ? 6 : AX5)" priority="0" />
+    <Setter variable="AK7" function="((SD7 &gt; 0) &amp; (DS7 &lt; 15000) &amp; (abs(deltaangle(260, Heading)) &lt; AD6))" priority="0" />
+    <Setter variable="AD7" function="(AK7 ? abs(deltaangle(260, Heading)) : AD6)" priority="0" />
+    <Setter variable="AX7" function="(AK7 ? 7 : AX6)" priority="0" />
+    <Setter variable="AK8" function="((SD8 &gt; 0) &amp; (DS8 &lt; 15000) &amp; (abs(deltaangle(45, Heading)) &lt; AD7))" priority="0" />
+    <Setter variable="AD8" function="(AK8 ? abs(deltaangle(45, Heading)) : AD7)" priority="0" />
+    <Setter variable="AX8" function="(AK8 ? 8 : AX7)" priority="0" />
+    <Setter variable="AK9" function="((SD9 &gt; 0) &amp; (DS9 &lt; 15000) &amp; (abs(deltaangle(225, Heading)) &lt; AD8))" priority="0" />
+    <Setter variable="AD9" function="(AK9 ? abs(deltaangle(225, Heading)) : AD8)" priority="0" />
+    <Setter variable="AX9" function="(AK9 ? 9 : AX8)" priority="0" />
+    <Setter variable="AK10" function="((SD10 &gt; 0) &amp; (DS10 &lt; 15000) &amp; (abs(deltaangle(180, Heading)) &lt; AD9))" priority="0" />
+    <Setter variable="AD10" function="(AK10 ? abs(deltaangle(180, Heading)) : AD9)" priority="0" />
+    <Setter variable="AX10" function="(AK10 ? 10 : AX9)" priority="0" />
+    <Setter variable="AK11" function="((SD11 &gt; 0) &amp; (DS11 &lt; 15000) &amp; (abs(deltaangle(345, Heading)) &lt; AD10))" priority="0" />
+    <Setter variable="AD11" function="(AK11 ? abs(deltaangle(345, Heading)) : AD10)" priority="0" />
+    <Setter variable="AX11" function="(AK11 ? 11 : AX10)" priority="0" />
+    <Setter variable="AK12" function="((SD12 &gt; 0) &amp; (DS12 &lt; 15000) &amp; (abs(deltaangle(225, Heading)) &lt; AD11))" priority="0" />
+    <Setter variable="AD12" function="(AK12 ? abs(deltaangle(225, Heading)) : AD11)" priority="0" />
+    <Setter variable="AX12" function="(AK12 ? 12 : AX11)" priority="0" />
+    <Setter variable="SLK" function="(((clamp01(Activate7) &gt; 0.5) &amp; (AltitudeAgl &gt; 3)) ? (SLK + (1 - (SLK &gt; -0.5)) * ((clamp01(AX12 &gt; -0.5) * AX12 + (1 - clamp01(AX12 &gt; -0.5)) * (clamp01((PU12 &gt; 0.5)) * PI12 + (1 - clamp01((PU12 &gt; 0.5))) * FI12)) - SLK)) : (-1))" priority="0" />
     <Setter variable="KM0" function="((abs(SLK - 0) &lt; 0.5) &amp; (SD0 &lt; 15000))" priority="0" />
     <Setter variable="MS0" function="(KM0 ? SD0 : 9999999)" priority="0" />
     <Setter variable="ML0" function="(KM0 ? LT0 : -9999999)" priority="0" />
