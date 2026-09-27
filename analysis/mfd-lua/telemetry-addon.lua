@@ -36,6 +36,12 @@
 
 
 
+
+
+
+
+
+
 -- ==== 面板镜像（自动生成：ft_mirror_gen.py）====
 local _ftmirror = (function()
 --[[ ==========================================================================
@@ -148,6 +154,16 @@ function M.step()
   local dt = _prev.t and (now - _prev.t) or 0
   _prev.t = now
   if dt <= 0 or dt > 0.5 then dt = 0.05 end     -- 暂停/实验跳变钳位（同 telemetry-addon 纪律）
+  --[[ ★★V 表预置为 0（2026-09-27 第五架次事故）：
+       FT 引擎里每个 setter 的初值是 **0**（未赋值也能参与算术）；
+       镜像的 V 是普通空表 ⇒ 首帧读到自己就是 **nil**，nil 做算术直接抛
+           attempt to perform arithmetic on a nil value
+       受害的是**自参照** setter（`SLK`、`cmdTheF_I` 的退绕支 `0 - X*1.5`）。
+       这里按 FT 语义统一预置 0（而不是给那两条单独打补丁）——
+       与 §37"镜像须与面板同初值"一致，也让任何未来的自参照写法天然安全。
+  ]]
+  for k in pairs(V) do V[k] = 0 end
+  for _, k in ipairs({"boot", "cmdPhi", "vs", "airb", "hold", "RCAP", "vsLim", "airEver", "SD0", "LT0", "SD1", "LT1", "SD2", "LT2", "SD3", "LT3", "SD4", "LT4", "SD5", "LT5", "SD6", "LT6", "SD7", "LT7", "SD8", "LT8", "SD9", "LT9", "SD10", "LT10", "SD11", "LT11", "SD12", "LT12", "G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "BG0", "DS0", "BG1", "DS1", "BG2", "DS2", "BG3", "DS3", "BG4", "DS4", "BG5", "DS5", "BG6", "DS6", "BG7", "DS7", "BG8", "DS8", "BG9", "DS9", "BG10", "DS10", "BG11", "DS11", "BG12", "DS12", "K0", "PR0", "KP0", "PS0", "PL0", "PT0", "PD0", "PP0", "PU0", "PI0", "KF0", "FS0", "FL0", "FT0", "FD0", "FP0", "FU0", "FI0", "K1", "PR1", "KP1", "PS1", "PL1", "PT1", "PD1", "PP1", "PU1", "PI1", "KF1", "FS1", "FL1", "FT1", "FD1", "FP1", "FU1", "FI1", "K2", "PR2", "KP2", "PS2", "PL2", "PT2", "PD2", "PP2", "PU2", "PI2", "KF2", "FS2", "FL2", "FT2", "FD2", "FP2", "FU2", "FI2", "K3", "PR3", "KP3", "PS3", "PL3", "PT3", "PD3", "PP3", "PU3", "PI3", "KF3", "FS3", "FL3", "FT3", "FD3", "FP3", "FU3", "FI3", "K4", "PR4", "KP4", "PS4", "PL4", "PT4", "PD4", "PP4", "PU4", "PI4", "KF4", "FS4", "FL4", "FT4", "FD4", "FP4", "FU4", "FI4", "K5", "PR5", "KP5", "PS5", "PL5", "PT5", "PD5", "PP5", "PU5", "PI5", "KF5", "FS5", "FL5", "FT5", "FD5", "FP5", "FU5", "FI5", "K6", "PR6", "KP6", "PS6", "PL6", "PT6", "PD6", "PP6", "PU6", "PI6", "KF6", "FS6", "FL6", "FT6", "FD6", "FP6", "FU6", "FI6", "K7", "PR7", "KP7", "PS7", "PL7", "PT7", "PD7", "PP7", "PU7", "PI7", "KF7", "FS7", "FL7", "FT7", "FD7", "FP7", "FU7", "FI7", "K8", "PR8", "KP8", "PS8", "PL8", "PT8", "PD8", "PP8", "PU8", "PI8", "KF8", "FS8", "FL8", "FT8", "FD8", "FP8", "FU8", "FI8", "K9", "PR9", "KP9", "PS9", "PL9", "PT9", "PD9", "PP9", "PU9", "PI9", "KF9", "FS9", "FL9", "FT9", "FD9", "FP9", "FU9", "FI9", "K10", "PR10", "KP10", "PS10", "PL10", "PT10", "PD10", "PP10", "PU10", "PI10", "KF10", "FS10", "FL10", "FT10", "FD10", "FP10", "FU10", "FI10", "K11", "PR11", "KP11", "PS11", "PL11", "PT11", "PD11", "PP11", "PU11", "PI11", "KF11", "FS11", "FL11", "FT11", "FD11", "FP11", "FU11", "FI11", "K12", "PR12", "KP12", "PS12", "PL12", "PT12", "PD12", "PP12", "PU12", "PI12", "KF12", "FS12", "FL12", "FT12", "FD12", "FP12", "FU12", "FI12", "SLK", "KM0", "MS0", "ML0", "MT0", "MD0", "MB0", "MU0", "KM1", "MS1", "ML1", "MT1", "MD1", "MB1", "MU1", "KM2", "MS2", "ML2", "MT2", "MD2", "MB2", "MU2", "KM3", "MS3", "ML3", "MT3", "MD3", "MB3", "MU3", "KM4", "MS4", "ML4", "MT4", "MD4", "MB4", "MU4", "KM5", "MS5", "ML5", "MT5", "MD5", "MB5", "MU5", "KM6", "MS6", "ML6", "MT6", "MD6", "MB6", "MU6", "KM7", "MS7", "ML7", "MT7", "MD7", "MB7", "MU7", "KM8", "MS8", "ML8", "MT8", "MD8", "MB8", "MU8", "KM9", "MS9", "ML9", "MT9", "MD9", "MB9", "MU9", "KM10", "MS10", "ML10", "MT10", "MD10", "MB10", "MU10", "KM11", "MS11", "ML11", "MT11", "MD11", "MB11", "MU11", "KM12", "MS12", "ML12", "MT12", "MD12", "MB12", "MU12", "rwyPri", "rwyOk", "SD", "LT", "TLA", "HDG", "BRG", "trkNow", "trkGd", "trkUse", "CRAB", "XW", "HW", "xtrk", "trkEr", "Rturn", "LEAD", "bankTrk", "altTgt", "tanG", "fldE", "htExcess", "vsLine", "vsCmd", "vsErr", "vsInt", "altTgtH", "vsCmdH", "vsErrH", "cmdTheF_P", "cmdTheF_I", "cmdTheF", "cmdThe", "phiCmdF", "phiCmd", "VAPP", "airFly", "gndIdle", "thrErr", "thrInt", "thrPath", "thrPI", "thrCmd", "spdBrk", "revOn", "appr", "appr", "gndBit", "gearCmd", "brkT", "brkLvl", "brkCmd", "gearUp", "lgWarn"}) do V[k] = 0 end
   S.dt = dt
   S.Time = now
   local c = craft
@@ -758,6 +774,8 @@ function initialize()
 	_appr_hdr()
 	_appr_hdr()
 	_appr_hdr()
+	_appr_hdr()
+	_appr_hdr()
 end
 
 -- ==== FT-ONLY 编译开关（2026-09-25，用户裁定）================================
@@ -869,6 +887,10 @@ function update()
 			c.Throttle, c.Trim, c.Pitch, c.Roll, c.Yaw, c.Flaps))
 		
 		_appr_log()
+
+_appr_log()
+
+_appr_log()
 
 _appr_log()
 

@@ -130,7 +130,12 @@ def render(panel, keys, all_keys=False, tpl_path=None):
 
     out = tpl.replace("__MIRROR_EVAL__", ev)
     out = out.replace("__MIRROR_BODY__", "-- （内置量快照已在 M.step 顶部填写，无需额外 body）")
+    # V 表键名清单：供 step() 首帧把每条预置 0（FT 引擎的 setter 初值就是 0；
+    # 空表会让自参照 setter 首帧读到 nil ⇒ nil 算术抛错，见 tpl 里的长注）。
+    vkeys = "{" + ", ".join('"%s"' % n for n, _ in lines) + "}"
+    out = out.replace("__VKEYS__", vkeys)
     check_bool_coercion(out)
+    check_nil_safety(out, sel)
     return out, sel
 
 
@@ -219,6 +224,45 @@ def check_bool_coercion(lua_src):
         raise SystemExit("布尔入数值闸不过（Lua 会抛 number expected, got boolean）：\n  "
                          + "\n  ".join(probs[:12]))
     print("布尔入数值闸过：数值函数实参均经 _n() 或本就是数值式")
+
+
+def check_nil_safety(lua_src, sel):
+    """**nil 安全闸**（2026-09-27 第五架次事故的机械防复发）。
+
+    背景：FT 引擎里 setter 初值 = **0**；镜像 V 是空表 ⇒ 首帧读到 nil。
+    加上 Lua 的 `and/or` 三元降级遇到 nil 会**静默传递**（nil 当假值继续 or），
+    最终在某个算术处才爆——报错行与真因常常不在一处（第五局：报 1162 行，
+    真因是自参照 `cmdTheF_I` 读自己）。
+
+    本闸做两件事：
+      ① **拓扑**：每条 `V[x] = …` 引用的 `V.y` 必须已在本条**之前**赋值；
+         自参照（引用自己）单独列出——那是合法的（§27b），但**必须**靠 V 预置 0 兜底，
+         故必须有 `__VKEYS__` 预置机制存在。
+      ② **确认预置机制在**：生成物里必须出现 `for _, k in ipairs(` 的 V 预置语句。
+    """
+    evals = re.findall(r'^\s*V\["(\w+)"\]\s*=\s*(.*)$', lua_src, re.M)
+    idx = {n: i for i, (n, _) in enumerate(evals)}
+    probs, selfrefs, missing, forward = [], [], [], []
+    for i, (n, e) in enumerate(evals):
+        for ref in sorted(set(re.findall(r"\bV\.(\w+)", e))):
+            if ref == n:
+                selfrefs.append(n)
+            elif ref not in idx:
+                missing.append((n, ref))
+            elif idx[ref] > i:
+                forward.append((n, ref))
+    for n, r in missing:
+        probs.append("%s 引用了**不在镜像里**的 %s（V 表里永不会赋值）" % (n, r))
+    for n, r in forward:
+        probs.append("%s 引用了**排在它之后**的 %s（前向引用 ⇒ 首帧 nil）" % (n, r))
+    # 自参照必须有 V 预置兜底
+    if selfrefs and "for _, k in ipairs(" not in lua_src:
+        probs.append("存在自参照 setter %s，但生成物没有 V 表预置 0 的语句 "
+                     "⇒ 首帧读到 nil 会抛 arithmetic on a nil value" % sorted(set(selfrefs)))
+    if probs:
+        raise SystemExit("nil 安全闸不过：\n  " + "\n  ".join(probs[:12]))
+    print("nil 安全闸过：%d 条求值无缺失/前向引用；自参照 %s（已由 V 预置 0 兜底）"
+          % (len(evals), sorted(set(selfrefs)) or "无"))
 
 
 def check_lua_syntax(src, label):

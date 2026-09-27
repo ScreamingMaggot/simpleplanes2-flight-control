@@ -108,6 +108,16 @@ function M.step()
   local dt = _prev.t and (now - _prev.t) or 0
   _prev.t = now
   if dt <= 0 or dt > 0.5 then dt = 0.05 end     -- 暂停/实验跳变钳位（同 telemetry-addon 纪律）
+  --[[ ★★V 表预置为 0（2026-09-27 第五架次事故）：
+       FT 引擎里每个 setter 的初值是 **0**（未赋值也能参与算术）；
+       镜像的 V 是普通空表 ⇒ 首帧读到自己就是 **nil**，nil 做算术直接抛
+           attempt to perform arithmetic on a nil value
+       受害的是**自参照** setter（`SLK`、`cmdTheF_I` 的退绕支 `0 - X*1.5`）。
+       这里按 FT 语义统一预置 0（而不是给那两条单独打补丁）——
+       与 §37"镜像须与面板同初值"一致，也让任何未来的自参照写法天然安全。
+  ]]
+  for k in pairs(V) do V[k] = 0 end
+  for _, k in ipairs(__VKEYS__) do V[k] = 0 end
   S.dt = dt
   S.Time = now
   local c = craft
