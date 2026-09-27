@@ -77,6 +77,16 @@ def _mir_smooth(M, k, x, t, dt):
     return M[k]
 
 
+def _mir_n(x):
+    """布尔→数值（与 tpl 的 `_n` 同定义）。FT 有隐式转换、Lua 没有：
+    `clamp01(MU12 > 0.5)` 在 FT 合法，翻译到 Lua 必须经此层，否则 `math.min(1, true)` 抛错。"""
+    if isinstance(x, bool):
+        return 1.0 if x else 0.0
+    if isinstance(x, (int, float)):
+        return float(x)
+    return 0.0
+
+
 def _mir_pid(M, k, T, C, p, i, d, dt):
     st = M.get(k)
     if st is None:
@@ -275,6 +285,8 @@ def lua_eval(expr, S, V, M):
          "_sum": lambda k, x, dt: _mir_sum(M, k, x, dt),
          "_smooth": lambda k, x, t, dt: _mir_smooth(M, k, x, t, dt),
          "_pid": lambda k, T, C, p, i, d, dt: _mir_pid(M, k, T, C, p, i, d, dt),
+         # 布尔→数值强制转换（与 tpl 的 _n 同定义；FT 有隐式转换、Lua 没有）
+         "_n": _mir_n,
          "dt": 0.02}
     return eval(py, g, _Env(S, V, M))
 

@@ -84,6 +84,21 @@ local function _g(obj, key, dflt)
   return dflt
 end
 
+--[[ ★★布尔→数值强制转换（2026-09-27 第四次架次的事故根因，面板里 33 处）：
+     FT 里 `clamp01(MU12 > 0.5)` 合法——比较出 bool，函数按 §23 的 true→1/false→−1 收下。
+     Lua **没有**隐式转换：`math.min(1, true)` 直接抛
+         bad argument #2 to 'min' (number expected, got boolean)
+     异常从 _ftmirror.step() 抛出 ⇒ 整个 APPR 停摆（所幸 pcall 围栏保住了 TEL）。
+
+     ⇒ 翻译器给**每个数值函数的实参**都套上 _n()。这一层是必需的，不是防御性冗余：
+     面板里"布尔喂进数值函数"共 33 处、涉及 16 个 setter（clamp01(min/max/abs 系列）。
+]]
+local function _n(x)
+  if type(x) == "number" then return x end
+  if type(x) == "boolean" then return x and 1 or 0 end
+  return 0                     -- nil/其它 ⇒ 0（与 FT 的 false→数 取 0/1 指示语义一致）
+end
+
 --[[ 由生成器注入：S.xxx 取值源与 V.xxx 求值式（见 ft_mirror_gen.py 输出）]]
 __MIRROR_BODY__
 

@@ -427,3 +427,34 @@ Lua script error: chunk_1:(1288,1-44): cannot access field VTOL of userdata<Asse
 
 **代价账**：用户为这条观测线飞了**四个架次**（① 旧补丁没数据 ② VTOL 打死 ③ 只修镜像块、同处裸读仍在 ④ 本修）。
 根因都是同一个纪律缺口：**未实测的代理字段直接进主链路**。
+
+### ★§38 补二（第五架次）：FT 有 bool→数**隐式转换**，Lua 没有 ⇒ 33 处全要包
+
+**这一局是第一次"部分成功"**（值得记下来，因为它证明围栏设计对了）：
+`TEL` 活着（2405 行）、`FT8` 活着（2409 行）、**`grep "Lua script error"` 零命中**，
+而 APPR 报 5 次错后自行停摆：
+```
+APPR MIRROR ERROR (1/5): bad argument #2 to 'min' (number expected, got boolean)
+APPR MIRROR DISABLED after 5 consecutive errors (TEL unaffected)
+```
+⇒ **pcall 围栏按设计工作**：观测死了，主遥测毫发无伤。这正是上一轮那句
+"观测把主遥测打死比没有观测恶劣得多"的兑现。
+
+**新 bug 的根因（翻译层语义偏差，非环境问题）**：
+FT 里 `clamp01(MU12 > 0.5)` **合法**——比较出 bool，函数按 §23 的 true→1/false→−1 收下；
+Lua **没有隐式转换**：`math.min(1, true)` 直接抛 `bad argument #2 to 'min'`。
+我的翻译器把 `clamp01(x)` 直译成 `math.max(0, math.min(1, x))`，没做布尔→数值转换。
+
+**规模（关键）**：面板里"布尔喂进数值函数"共 **33 处、涉及 16 个 setter**
+（`clamp01((MU12>0.5))`、`min(IAS<45?8:90, …)`、`clamp(sum(cond?…:0),…)` …）。
+⇒ **只修运行时炸出的那一处必然复发**——必须在**翻译层**统一兜住：
+`ft_to_lua.py` 给**每个数值函数实参**套 `_n()`（bool→1/0、nil→0），共注入 **489 处**。
+
+**机械防复发**：`ft_mirror_gen.check_bool_coercion()` —— **布尔入数值闸**。
+只查数值函数的**直接实参**：含比较式且未被 `_n(` 包住 ⇒ 拒绝产出。
+已用"故意去掉 `_n` → 闸红；恢复 → 放行"反向验证。
+（本闸第一版把**嵌套**调用也算了，结果把已正确包裹的式子全报假阳性 12 条 ⇒
+ 判据必须限定在"直接实参"，嵌套交给内层那次检查。）
+
+**注**：`_n()` 用 **1/0** 而非 FT 文档的 1/−1——这些量随后都进 `clamp01/min/max`
+做**选路与限幅**，语义上要的是 0/1 指示；已由 `verify_mirror` 的逐点比对覆盖。

@@ -130,7 +130,95 @@ def render(panel, keys, all_keys=False, tpl_path=None):
 
     out = tpl.replace("__MIRROR_EVAL__", ev)
     out = out.replace("__MIRROR_BODY__", "-- （内置量快照已在 M.step 顶部填写，无需额外 body）")
+    check_bool_coercion(out)
     return out, sel
+
+
+def _split_top_args(s):
+    """按顶层逗号切分实参串。"""
+    out, d, cur = [], 0, []
+    for ch in s:
+        if ch == "(":
+            d += 1
+        elif ch == ")":
+            d -= 1
+        if ch == "," and d == 0:
+            out.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    out.append("".join(cur))
+    return out
+
+
+def check_bool_coercion(lua_src):
+    """**布尔入数值闸**（2026-09-27 第四次架次事故的机械防复发）。
+
+    FT 有 bool→数隐式转换（`clamp01(MU12 > 0.5)` 合法）；Lua **没有**：
+        math.min(1, true) → bad argument #2 to 'min' (number expected, got boolean)
+    ⇒ 翻译器给每个数值函数实参套 `_n()`。本闸核对：数值函数的**直接实参**里
+    不得出现裸比较式，除非被 `_n(` 包住。
+
+    ⚠ 只查**直接实参**：若实参本身是另一个函数调用（如 `math.max(0, math.min(1, _n(x)))`），
+      那是内层调用自己的事，本层不该管——第一版没做这层区分，把已正确包裹的式子
+      全报成假阳性（满屏 12 条，全是 `_n(` 已包住的）。
+    """
+    probs = []
+    numfns = ("math.min", "math.max", "math.abs", "math.floor", "math.ceil",
+              "math.sqrt", "math.rad", "math.sin", "math.cos", "math.tan",
+              "math.asin", "math.acos", "math.atan")
+    for ln, line in enumerate(lua_src.split("\n"), 1):
+        s = line.strip()
+        if not s or s.startswith("--"):
+            continue
+        for fn in numfns:
+            k = 0
+            while True:
+                k = line.find(fn + "(", k)
+                if k < 0:
+                    break
+                a0 = k + len(fn) + 1
+                d, i = 1, a0
+                while i < len(line) and d > 0:
+                    if line[i] == "(":
+                        d += 1
+                    elif line[i] == ")":
+                        d -= 1
+                    i += 1
+                inner = line[a0:i - 1]
+                k = i if i > k else k + 1
+                for a in _split_top_args(inner):
+                    a = a.strip()
+                    if not a:
+                        continue
+                    if not re.search(r"(<|>|~=|==|!=)", a):
+                        continue          # 不含比较 ⇒ 无论怎样都是数值，安全
+                    # 剥外层括号
+                    st, changed = a, True
+                    while changed and st.startswith("(") and st.endswith(")"):
+                        changed = False
+                        d2, ok = 0, True
+                        for j, ch in enumerate(st):
+                            if ch == "(":
+                                d2 += 1
+                            elif ch == ")":
+                                d2 -= 1
+                                if d2 == 0 and j != len(st) - 1:
+                                    ok = False
+                                    break
+                        if ok:
+                            st = st[1:-1].strip()
+                            changed = True
+                    if st.startswith("_n("):
+                        continue              # 已包裹 ✓
+                    # 实参本身是另一个数值函数调用 ⇒ 交给内层那次检查判断（见函数注释）
+                    if any(st.startswith(f2 + "(") for f2 in numfns):
+                        continue
+                    probs.append("第 %d 行 %s(…) 的实参未做布尔转换：%s" % (ln, fn, a[:68]))
+    if probs:
+        raise SystemExit("布尔入数值闸不过（Lua 会抛 number expected, got boolean）：\n  "
+                         + "\n  ".join(probs[:12]))
+    print("布尔入数值闸过：数值函数实参均经 _n() 或本就是数值式")
 
 
 def check_lua_syntax(src, label):

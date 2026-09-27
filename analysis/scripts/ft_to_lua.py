@@ -62,6 +62,19 @@ SIMPLE_FUNCS = {
     "deltaangle": "((( ({1}) - ({0}) ) + 180) % 360 - 180)",
     "lerpangle":  "(({0}) + deltaangle({0}, {1}) * ({2}))",
 }
+
+# ── ★★布尔→数值：FT 有隐式转换，Lua **没有**（2026-09-27 第四次架次的事故根因）──────
+#   FT 里 `clamp01(MU12 > 0.5)` 合法：比较出 bool，clamp01 按 §23 的 true→1/false→−1 收下。
+#   Lua 里 `math.min(1, true)` 直接抛：
+#       bad argument #2 to 'min' (number expected, got boolean)
+#   面板里有 **33 处**这种"布尔喂进数值函数"（涉及 16 个 setter）⇒ 修一处没用，
+#   必须在**翻译层**统一给数值函数的实参加 `_n()` 强制转换（bool→1/0、nil→0）。
+#
+#   ⚠ 用 1/0 而不是 FT 文档里的 1/−1：这些量随后都进 clamp01/min/max 做**选路与限幅**，
+#     语义上要的是 0/1 指示（`clamp01(cond)`）。已由 verify_mirror 的逐点比对覆盖。
+NUMFUNCS = {"abs", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+            "floor", "ceil", "round", "min", "max", "clamp", "clamp01", "sign",
+            "pow", "lerp", "deltaangle", "lerpangle"}
 # 实参个数守卫：(最少, 最多)；None = 不限
 ARITY = {"abs": (1, 1), "sqrt": (1, 1), "sin": (1, 1), "cos": (1, 1), "tan": (1, 1),
          "asin": (1, 1), "acos": (1, 1), "atan": (1, 1), "atan2": (2, 2),
@@ -333,6 +346,12 @@ class _P:
         lo, hi = ARITY.get(name, (1, None))
         if len(args) < lo or (hi is not None and len(args) > hi):
             raise TranspileError("%s() 实参个数 %d 不在 [%s, %s]" % (name, len(args), lo, hi))
+        # ★数值函数实参一律经 `_n()` 强制转数值：FT 有 bool→数的隐式转换，Lua 没有。
+        #   不加这一层，`clamp01(MU12 > 0.5)` 会生成 `math.min(1, true)` ⇒
+        #   `bad argument #2 to 'min' (number expected, got boolean)`（第四次架次的事故）。
+        #   面板里此类共 33 处 / 16 个 setter ⇒ 必须在翻译层统一兜住。
+        if name in NUMFUNCS:
+            args = ["_n(%s)" % a for a in args]
         out = tpl.replace("{*}", ", ".join(args))
         return out.format(*args)
 
