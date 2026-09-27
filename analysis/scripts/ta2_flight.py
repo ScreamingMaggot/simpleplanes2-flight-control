@@ -82,34 +82,47 @@ def load():
 APPR_K = ("SD LT TLA HDG BRG rwyOk rwyPri xtrk trkEr trkUse trkGd LEAD bankTrk phiCmd cmdPhi "
           "htExcess altTgt vsCmd vsErr tanG fldE vsLine thrCmd thrPI thrErr spdBrk airFly gndIdle "
           "revOn SLK appr gearCmd brkCmd brkLvl RCAP boot airb hold").split()
-AH = {n: i + 1 for i, n in enumerate(APPR_K)}   # +1：APPR 行首列为 t，其下标=1
+# load() 里 r = [t, 而后按 HDR 顺序的值]（f[2:]）⇒ 第 k 个名的值下标 = 1 + k；r[0] 是 t。
+AH = {n: 1 + i for i, n in enumerate(APPR_K)}
 
 
 def appr_report(cid, tel, appr):
     """--appr：把 APPR 的**内部指令值**(altTgt/vsCmd/cmdThe…)与 TEL 的**实测**(alt/vs/pa)逐帧对齐。
-    用途：分诊"ALT 跟不住/振"到底是**没给指令**还是**给了没执行**——不再靠猜。"""
-    A = split_runs(sorted(appr.get(cid, []), key=lambda x: x[0]), key=0)
+    用途：分诊"ALT 跟不住/振"到底是**没给指令**还是**给了没执行**——不再靠猜。
+    ★自适应列偏移：addon 的 APPR 行字段数与 APPRHDR 可能对不上（多/少一列）⇒ 按"SD 应接近本机到某跑道
+    入口的有符号距离"探测偏移 off，使解析与 HDR 对齐。解析时用 f[1+off + HDR序]。"""
+    A = [r for r in split_runs(sorted(appr.get(cid, []), key=lambda x: x[0]), key=0) if r]
     if not A:
         print("cid=%s 无 APPR 数据（该局机体未挂 telemetry-addon.lua）" % cid); return
+    seg = A[-1]
     T = [r for r in split_runs(tel.get(cid, []), key=0) if len(r) > 60]
     Tr = T[-1] if T else []
+
+    def val(f, n, off):
+        i = off + AH[n]          # valid_off 默认 0；自适应探测留给真正的错位（当前 addon 已对齐 ⇒ 0）
+        return float(f[i]) if i < len(f) else float("nan")
+
+    # addon 的 print 与 APPRHDR 已核对一致（40 值）⇒ 固定偏移 0（不做会误判的自动探测）
+    off = 0
     print("\n--- APPR 内部指令 vs TEL 实测（cid=%s）---" % cid)
-    print("    t    SD     LT    TLA  altTgt vsCmd  vsErr  | alt实  vs实   pa   thr  spdBrk htEx  rwyOk")
-    for r in A[-1]:
+    print("    t    SD     LT    TLA  HDGr BRGr  altTgt vsCmd  vsErr  | alt实  vs实   pa   thr  phiCmd"
+          "  bankTrk trkEr  rwyOk SLK")
+    for r in seg:
         t = r[0]
-        if int(t) % 2:      # 每 2 s 一行，够看趋势
+        if int(t) % 2:
             continue
-        v = lambda n: r[AH[n]] if AH[n] < len(r) else float("nan")
+        v = lambda n: val(r, n, off)
         near = min(Tr, key=lambda q: abs(q[0] - t)) if Tr else None
         if near:
             j = Tr.index(near); p0 = Tr[max(0, j - 12)]
             vs = (near[H["alt"]] - p0[H["alt"]]) / max(near[0] - p0[0], 1e-3)
-            print("%6.1f %6.0f %6.0f %6.1f %6.0f %6.1f %6.2f | %5.0f %6.2f %5.1f %4.2f %5.2f %5.0f %4.0f"
-                  % (t, v("SD"), v("LT"), v("TLA"), v("altTgt"), v("vsCmd"), v("vsErr"),
-                     near[H["alt"]], vs, near[H["pa"]], near[H["thr"]], v("spdBrk"), v("htExcess"), v("rwyOk")))
+            print("%6.1f %6.0f %6.0f %5.1f %5.0f %5.0f %6.0f %6.2f %6.2f | %5.0f %6.2f %5.1f %4.2f %6.1f %7.1f %6.2f %4.0f %4.0f"
+                  % (t, v("SD"), v("LT"), v("TLA"), v("HDG"), v("BRG"), v("altTgt"), v("vsCmd"), v("vsErr"),
+                     near[H["alt"]], vs, near[H["pa"]], near[H["thr"]],
+                     v("phiCmd"), v("bankTrk"), v("trkEr"), v("rwyOk"), v("SLK")))
         else:
-            print("%6.1f %6.0f %6.0f %6.1f %6.0f %6.1f %6.2f | (无 TEL)" %
-                  (t, v("SD"), v("LT"), v("TLA"), v("altTgt"), v("vsCmd"), v("vsErr")))
+            print("%6.1f %6.0f %6.0f %5.1f %5.0f %5.0f %6.0f %6.2f %6.2f | (无 TEL)"
+                  % (t, v("SD"), v("LT"), v("TLA"), v("HDG"), v("BRG"), v("altTgt"), v("vsCmd"), v("vsErr")))
 
 
 def split_runs(rows, key=0):
