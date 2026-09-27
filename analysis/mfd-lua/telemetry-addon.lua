@@ -2,7 +2,9 @@
 -- 机制：MfdProgram 每帧经 RoundRobin 调 update()；print() 直通 Debug.Log → Player.log
 -- 输出行格式：TEL,t,alt,agl,ias,gs,pa,pr,yr,hr,ra,rr,aoa,aos,gf,vg,fuel,thr,trim,pit,rol,yaw
 -- 注意：视野外/飞机被剔除时 MFD 可能停更，采样间隔以每行自带的 t 为准（不要假设等间隔）
-
+local _frame = 0
+local _lastT = 0
+local _cidn = nil          -- 本机身份号（首帧位置派生；一局面多架带MFD的机会共写一份日志）
 -- ==== 面板镜像（自动生成：ft_mirror_gen.py）====
 local _ftmirror = (function()
 --[[ ==========================================================================
@@ -713,12 +715,8 @@ local function _appr_log()
 	end
 end
 -- ==== /APPR ====
-
 local _origInitialize = initialize
 local _origUpdate = update
-local _frame = 0
-local _lastT = 0
-local _cidn = nil          -- 本机身份号（首帧位置派生；一局面多架带MFD的机会共写一份日志）
 
 function initialize()
 	if _origInitialize then _origInitialize() end

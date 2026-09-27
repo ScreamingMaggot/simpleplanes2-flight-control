@@ -299,6 +299,40 @@ def check_definition_order(src):
     print("词法作用域闸过：_ftmirror@%d _appr_log@%d 使用@%d update@%d"
           % (d_mirror, d_appr, u_appr, d_update))
 
+    # ★★局部变量可见性闸：`_appr_log` 体内**引用到的每一个** `local` 名字，
+    #   其 `local` 声明都必须**先于** `_appr_log` 的定义行出现。
+    #   事故（2026-09-27）：`local _cidn` 声明晚于 `_appr_log` ⇒ 函数体内看到的是
+    #   另一个 nil 全局；`_num()` 把 nil 变成哨兵 -99999 ⇒ **不崩、静默写错**
+    #   （实测 256 行 APPR 的 cid 全为 -99999，而 TEL 同时刻是 74379）。
+    #   "把崩溃改成错数据"是最难发现的一类 bug，必须机械拦下。
+    decl_line = {}
+    for i, l in enumerate(lines, 1):
+        m = re.match(r"\s*local\s+(\w+)\s*=", l)
+        if m and m.group(1) not in decl_line:
+            decl_line[m.group(1)] = i
+    # 抽出 _appr_log 的函数体（到同缩进的 `end` 为止）
+    if d_appr:
+        body, depth = [], 0
+        for l in lines[d_appr:]:
+            body.append(l)
+            if l.strip() == "end" and len(body) > 1:
+                break
+        body_txt = "\n".join(body)
+        used = set(re.findall(r"\b(_\w+)\b", body_txt))
+        # 排除函数自己的局部量（在 body 内声明的）与函数名本身
+        own = set(re.findall(r"\blocal\s+(\w+)", body_txt)) | {"_appr_log"}
+        late = []
+        for name in sorted(used - own):
+            dl = decl_line.get(name)
+            if dl is not None and dl > d_appr:
+                late.append("%s(local@%d > 定义@%d)" % (name, dl, d_appr))
+        if late:
+            raise SystemExit(
+                "局部变量可见性闸不过 —— _appr_log 引用了**晚于自己声明**的 local：%s"
+                "。这会静默读到 nil 全局（_num 会把它变成 -99999 而不报错）。"
+                % "；".join(late))
+    print("局部变量可见性闸过：_appr_log 引用的 local 均已提前声明")
+
 
 def check_appr_row(src):
     """**行完整性闸**：APPR 的格式符个数、表头列数、取数列数三者必须一致。
@@ -422,7 +456,31 @@ def main():
     anchor = "local _origInitialize = initialize"
     if anchor not in src:
         sys.exit("注入锚未找到（addon 头部结构变了？）")
-    src = src.replace(anchor, mirror_mod + "\n" + block + "\n" + anchor, 1)
+
+    # ★★ `local _cidn` 必须**先于** `_appr_log` 的定义出现。
+    #   事故（2026-09-27 实测）：`_cidn` 原本声明在 `local _origInitialize` 之后、
+    #   而注入块插在该行**之前** ⇒ `_appr_log` 体内看到的 `_cidn` 是**另一个 nil 全局**。
+    #   后果极隐蔽：`_num()` 把 nil 变成哨兵 -99999，**不报错、不崩、静默写错数据**——
+    #   实测 256 行 APPR 的 cid 全是 -99999，而同一时刻 TEL 的 cid 是 74379。
+    #   "把崩溃改成错数据"比崩溃更恶劣，必须从根上修：把状态声明一起搬到注入块之前。
+    #   只搬**纯状态声明**（_frame/_lastT/_cidn）。★绝不能把 `local _origInitialize = initialize`
+    #   也搬走 —— 它是注入锚点，搬走锚点 ⇒ 注入点消失 ⇒ 镜像根本没进文件
+    #   （实测：词法作用域闸报 mirror=None appr=None）。
+    state_decls = re.search(
+        r"((?:^local _(?:frame|lastT|cidn)\b[^\n]*\n)+)", src, re.M)
+    if not state_decls:
+        sys.exit("状态声明块未找到（无法保证 _cidn 先于 _appr_log）")
+    decls = state_decls.group(1).rstrip("\n")
+    src = src[:state_decls.start(1)] + src[state_decls.end(1):]   # 先摘除
+    # ★摘除后会留下空行；不清掉则每轮 +1 行（实测 size 每轮 +2 字节）。
+    #   把「注入块尾 .. anchor」之间的多余空行收敛为恰好一个。
+    src = re.sub(r"\n{2,}(?=" + re.escape(anchor) + ")", "\n", src)
+    # ★★顺序至关重要：decls 必须排在 **mirror_mod/block 之前**，不能只排在 anchor 之前。
+    #   因为 APPR 块本身有 600+ 行（`_appr_log` 定义在其中），若把 decls 放在
+    #   「块之后、anchor 之前」，`_cidn` 仍然晚于 `_appr_log` 定义（实测 719 > 650）。
+    #   正确顺序：decls -> mirror_mod -> block -> anchor。
+    src = src.replace(anchor,
+                      decls + "\n" + mirror_mod + "\n" + block + anchor, 1)
 
     # 在 update() 内的 TEL/FT8 打印之后调用 _appr_log()。
     m2 = re.search(r"\n(\t*)(-- FT8 定高环内部量：.*?\n\t*print\(string\.format\("
