@@ -40,9 +40,18 @@ def load():
     # POS 与 TEL 一样**按文件顺序切成"局"**再段内排序：同一 cid 跨架次时按 t 全局排序会把
     # 两局的位置交错在一起（我踩过一次：SD 在 2268/3694 之间乱跳，看着像律在抖，其实是案卷读错）。
     tel, pos, alarm = {}, {}, {}
+    appr, appr_order = {}, []
     order = []
     for ln in io.open(LOG, encoding="utf-8", errors="replace"):
-        if ln.startswith("TEL,"):
+        if ln.startswith("APPR,"):
+            f = ln.rstrip("\n").split(",")
+            try:
+                appr.setdefault(f[1], []).append([float(x) for x in f[2:]])
+            except ValueError:
+                pass
+            if not appr_order or appr_order[-1] != f[1]:
+                appr_order.append(f[1])
+        elif ln.startswith("TEL,"):
             f = ln.rstrip("\n").split(",")
             if len(f) - 2 != len(K):
                 continue
@@ -67,7 +76,40 @@ def load():
                 pass
     # **不按 t 全局排序**：同一 cid 在一个 Player.log 里会跨多个架次（时基重置），
     # 排序会把两局数据交错成假单调序列（踩过）。按文件顺序切段、段内才排序。
-    return tel, pos, alarm, order
+    return tel, pos, alarm, order, appr
+
+
+APPR_K = ("SD LT TLA HDG BRG rwyOk rwyPri xtrk trkEr trkUse trkGd LEAD bankTrk phiCmd cmdPhi "
+          "htExcess altTgt vsCmd vsErr tanG fldE vsLine thrCmd thrPI thrErr spdBrk airFly gndIdle "
+          "revOn SLK appr gearCmd brkCmd brkLvl RCAP boot airb hold").split()
+AH = {n: i + 1 for i, n in enumerate(APPR_K)}   # +1：APPR 行首列为 t，其下标=1
+
+
+def appr_report(cid, tel, appr):
+    """--appr：把 APPR 的**内部指令值**(altTgt/vsCmd/cmdThe…)与 TEL 的**实测**(alt/vs/pa)逐帧对齐。
+    用途：分诊"ALT 跟不住/振"到底是**没给指令**还是**给了没执行**——不再靠猜。"""
+    A = split_runs(sorted(appr.get(cid, []), key=lambda x: x[0]), key=0)
+    if not A:
+        print("cid=%s 无 APPR 数据（该局机体未挂 telemetry-addon.lua）" % cid); return
+    T = [r for r in split_runs(tel.get(cid, []), key=0) if len(r) > 60]
+    Tr = T[-1] if T else []
+    print("\n--- APPR 内部指令 vs TEL 实测（cid=%s）---" % cid)
+    print("    t    SD     LT    TLA  altTgt vsCmd  vsErr  | alt实  vs实   pa   thr  spdBrk htEx  rwyOk")
+    for r in A[-1]:
+        t = r[0]
+        if int(t) % 2:      # 每 2 s 一行，够看趋势
+            continue
+        v = lambda n: r[AH[n]] if AH[n] < len(r) else float("nan")
+        near = min(Tr, key=lambda q: abs(q[0] - t)) if Tr else None
+        if near:
+            j = Tr.index(near); p0 = Tr[max(0, j - 12)]
+            vs = (near[H["alt"]] - p0[H["alt"]]) / max(near[0] - p0[0], 1e-3)
+            print("%6.1f %6.0f %6.0f %6.1f %6.0f %6.1f %6.2f | %5.0f %6.2f %5.1f %4.2f %5.2f %5.0f %4.0f"
+                  % (t, v("SD"), v("LT"), v("TLA"), v("altTgt"), v("vsCmd"), v("vsErr"),
+                     near[H["alt"]], vs, near[H["pa"]], near[H["thr"]], v("spdBrk"), v("htExcess"), v("rwyOk")))
+        else:
+            print("%6.1f %6.0f %6.0f %6.1f %6.0f %6.1f %6.2f | (无 TEL)" %
+                  (t, v("SD"), v("LT"), v("TLA"), v("altTgt"), v("vsCmd"), v("vsErr")))
 
 
 def split_runs(rows, key=0):
@@ -207,8 +249,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cid")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--appr", action="store_true", help="只打 APPR 内部指令 vs 实测（分诊垂直跟随）")
     a = ap.parse_args()
-    tel, pos, alarm, order = load()
+    tel, pos, alarm, order, appr = load()
+    if a.appr:
+        if not a.cid:
+            a.cid = order[-1]
+        appr_report(a.cid, tel, appr)
+        return
     if a.list or not a.cid:
         print("=== 最近出现的机体（按文件末尾顺序）===")
         for cid in order[-8:]:
